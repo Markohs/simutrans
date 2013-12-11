@@ -19,8 +19,6 @@
 /simutrans/text
 *.bdf
 *.zip
-*.vcxproj
-*.vcxproj.*
 /ipch/*
 *.*sdf
 *.diff
