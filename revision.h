@@ -1,0 +1,2 @@
+#define REVISION   Unversioned directory
+
