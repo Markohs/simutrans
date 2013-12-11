@@ -29,6 +29,7 @@ signal_t::signal_t(loadsave_t *file) :
 		besch = roadsign_t::default_signal;
 	}
 	zustand = rot;
+	set_non_static(true);
 }
 
 

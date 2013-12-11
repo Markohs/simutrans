@@ -30,6 +30,9 @@
 #include "display/simgraph.h"
 #include "simdebug.h"
 
+#include "boden/grund.h"
+#include "opengl/shaders.h"
+
 static Uint8 hourglass_cursor[] = {
 	0x3F, 0xFE, //   *************
 	0x30, 0x06, //   **         **
@@ -159,7 +162,7 @@ static inline void opengl_error(){
  * @param number the number to approx to
  * @return lowest pot number higher to the parameter passed
  */
-static int closest_pot(const int number){
+int closest_pot(const int number){
 
 	int result = 16;
 
@@ -294,6 +297,10 @@ static bool check_hardware_accelerated(){
 	return result==1;
 }
 
+int get_tex_max_size() {
+	return tex_max_size;
+}
+
 /**
  * Queue a texture update with the PBO from the old frame, and unlock the new one.
  */
@@ -413,7 +420,7 @@ int dr_os_open(int w, int const h, int const fullscreen)
 	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, 5);
 	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, 5);
 	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 5);
-	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
+	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 16);
 
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
@@ -438,6 +445,9 @@ int dr_os_open(int w, int const h, int const fullscreen)
 	hourglass = SDL_CreateCursor(hourglass_cursor, hourglass_cursor_mask, 16, 22, 8, 11);
 
 	glEnable(GL_TEXTURE_2D);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glDepthFunc(GL_LEQUAL);
 
 	check_for_extensions();
 	check_max_texture_size();
@@ -449,6 +459,8 @@ int dr_os_open(int w, int const h, int const fullscreen)
 
 	update_tex_dims();
 
+	init_shaders();
+
 	display_set_actual_width( w );
 	return tex_w;
 }
@@ -457,6 +469,8 @@ int dr_os_open(int w, int const h, int const fullscreen)
 // shut down SDL
 void dr_os_close()
 {
+	free_shaders();
+
 	SDL_FreeCursor(hourglass);
 	// Hajo: SDL doc says, screen is free'd by SDL_Quit and should not be
 	// free'd by the user
@@ -718,8 +732,15 @@ void dr_prepare_flush()
 {
 	if (pbo_able && !pixels)
 		pbo_map();
-	return;
+
+	glViewport(0, 0, screen->w, screen->h);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glEnable(GL_DEPTH_TEST);
 }
+
 
 /**
  * Clears screen and queues a new render.
@@ -731,8 +752,14 @@ void dr_flush()
 	else
 		display_flush_buffer();
 
-	glViewport(0, 0, screen->w, screen->h);
-	glClear(GL_COLOR_BUFFER_BIT);
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+
+	if( !grund_t::show_grid ) { // Hack
+
+	glDisable(GL_DEPTH_TEST);
 
 	if (!tiling_in_use){
 
@@ -741,7 +768,7 @@ void dr_flush()
 		else
 			glBindTexture(GL_TEXTURE_2D, gl_texture);
 
-		glColor3f(1.0f, 1.0f, 1.0f);
+		glColor4f(1.0f, 1.0f, 1.0f, 0.5f);
 
 		glBegin(GL_QUADS);
 		glTexCoord2f(0.0f, 0.0f);
@@ -755,7 +782,7 @@ void dr_flush()
 		glEnd();
 	}
 	else{
-		glColor3f(1.0f, 1.0f, 1.0f);
+		glColor4f(1.0f, 1.0f, 1.0f, 0.5f);
 		for (int x=0;x<n_tex_w;x++){
 			for (int y=0;y<n_tex_h;y++){
 
@@ -779,6 +806,9 @@ void dr_flush()
 			}
 		}
 	}
+
+	}
+
 	SDL_GL_SwapBuffers();
 }
 
@@ -800,6 +830,11 @@ void dr_textur(int xp, int yp, int w, int h)
 #endif
 	{
 		if (!tiling_in_use){
+			if (pbo_able)
+				glBindTexture(GL_TEXTURE_2D, pbo_textures[pbo_index]);
+			else
+				glBindTexture(GL_TEXTURE_2D, gl_texture);
+
 			glPixelStorei(GL_UNPACK_ROW_LENGTH, tex_w);
 			glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
 			glPixelStorei(GL_UNPACK_SKIP_PIXELS, xp);
@@ -1148,6 +1183,16 @@ void dr_sleep(uint32 usec)
 {
 	SDL_Delay(usec);
 }
+
+
+#ifdef _MSC_VER
+// Needed for MS Visual C++ with /SUBSYSTEM:CONSOLE to work , if /SUBSYSTEM:WINDOWS this function is compiled but unreachable
+int main()
+{
+	HINSTANCE const hInstance = (HINSTANCE)GetModuleHandle(NULL);
+	return WinMain(hInstance,NULL,NULL,NULL);
+}
+#endif
 
 
 #ifdef _WIN32

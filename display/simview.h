@@ -7,6 +7,9 @@
 #ifndef simview_h
 #define simview_h
 
+#include "../opengl/static_geometry.h"
+#include "../opengl/dynamic_geometry.h"
+
 class karte_t;
 class viewport_t;
 
@@ -25,6 +28,10 @@ private:
 
 	/// Cached value from last display run to determine if the background was visible, we'll save redraws if it was not.
 	bool outside_visible;
+
+	texture_atlas_t texture_atlas;
+	static_geometry_t static_geometry;
+	dynamic_geometry_t dynamic_geometry;
 
 public:
 	karte_ansicht_t(karte_t *welt);
@@ -66,6 +73,9 @@ public:
 	 */
 	void display_background( KOORD_VAL xp, KOORD_VAL yp, KOORD_VAL w, KOORD_VAL h, bool dirty );
 
+	void mark_dirty(const koord &pos) { static_geometry.set_dirty(pos.x, pos.y); }
+	void reset_map() { static_geometry.reset(); }
+	void init_textures() { texture_atlas.init(); }
 };
 
 #endif

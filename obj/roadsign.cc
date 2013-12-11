@@ -67,6 +67,7 @@ roadsign_t::roadsign_t(loadsave_t *file) : obj_t ()
 	// only traffic light need switches
 	if(  automatic  ) {
 		welt->sync_add(this);
+		set_non_static(true);
 	}
 }
 
@@ -97,6 +98,7 @@ roadsign_t::roadsign_t(spieler_t *sp, koord3d pos, ribi_t::ribi dir, const roads
 	// only traffic light need switches
 	if(  automatic  ) {
 		welt->sync_add(this);
+		set_non_static(true);
 	}
 }
 

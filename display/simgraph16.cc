@@ -22,6 +22,7 @@
 #include "../unicode.h"
 #include "../simticker.h"
 #include "simgraph.h"
+#include "../opengl/texture_atlas.h"
 
 
 #ifdef _MSC_VER
@@ -329,7 +330,7 @@ PIXVAL specialcolormap_all_day[256];
 
 
 // offsets of first and second company color
-static uint8 player_offsets[MAX_PLAYER_COUNT][2];
+uint8 player_offsets[MAX_PLAYER_COUNT][2];
 
 
 /*
@@ -464,7 +465,7 @@ COLOR_VAL display_night_lights[LIGHT_COUNT*3] = {
 
 // the players colors and colors for simple drawing operations
 // each eight colors are corresponding to a player color
-static const COLOR_VAL special_pal[224*3]=
+const COLOR_VAL special_pal[224*3]=
 {
 	36, 75, 103,
 	57, 94, 124,
@@ -1990,6 +1991,10 @@ void register_image(struct bild_t* bild)
 	}
 	image->player_flags = 0xFFFF; // recode all player colors
 
+	if(  bild->h > 0  ) {
+		register_texture(bild);
+	}
+
 	// find out if there are really player colors
 	for(  PIXVAL *src = bild->data, y = 0;  y < bild->h;  ++y  ) {
 		uint16 runlen;
@@ -2032,6 +2037,8 @@ void register_image(struct bild_t* bild)
 
 }
 
+
+extern void register_texture(const bild_t *image);
 
 // delete all images above a certain number ...
 // (mostly needed when changing climate zones)

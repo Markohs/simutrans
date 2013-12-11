@@ -80,8 +80,9 @@ private:
 	/**
 	 * Gets current ij offsets of this viewport, depends of its proportions and the zoom level.
 	 */
+public:
 	koord get_viewport_ij_offset() const { return view_ij_off; }
-
+private:
 	/**
 	 * Sets current ij offsets of this viewport, depends of its proportions and the zoom level.
 	 */

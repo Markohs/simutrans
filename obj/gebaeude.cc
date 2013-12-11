@@ -18,6 +18,7 @@ static pthread_mutex_t add_to_city_mutex = PTHREAD_MUTEX_INITIALIZER;
 #include "../bauer/hausbauer.h"
 #include "../gui/money_frame.h"
 #include "../simworld.h"
+#include "../display/simview.h"
 #include "../simobj.h"
 #include "../simfab.h"
 #include "../display/simimg.h"
@@ -87,6 +88,7 @@ gebaeude_t::gebaeude_t(loadsave_t *file) : obj_t()
 	if(tile  &&  tile->get_phasen()>1) {
 		welt->sync_eyecandy_add( this );
 		sync = true;
+		set_non_static(true);
 	}
 }
 
@@ -269,6 +271,8 @@ void gebaeude_t::set_tile( const haus_tile_besch_t *new_tile, bool start_with_co
 #endif
 			welt->sync_eyecandy_remove(this);
 			sync = false;
+			set_non_static(false);
+			welt->get_view()->mark_dirty(get_pos().get_2d());
 			count = 0;
 #ifdef MULTI_THREAD
 			pthread_mutex_unlock( &sync_mutex );
@@ -284,6 +288,8 @@ void gebaeude_t::set_tile( const haus_tile_besch_t *new_tile, bool start_with_co
 		anim_time = 0;
 		welt->sync_eyecandy_add(this);
 		sync = true;
+		set_non_static(true);
+		welt->get_view()->mark_dirty(get_pos().get_2d());
 #ifdef MULTI_THREAD
 		pthread_mutex_unlock( &sync_mutex );
 #endif
@@ -311,6 +317,8 @@ bool gebaeude_t::sync_step(long delta_t)
 			if(tile->get_phasen()<=1) {
 				welt->sync_eyecandy_remove( this );
 				sync = false;
+				set_non_static(false);
+				welt->get_view()->mark_dirty(get_pos().get_2d());
 			}
 		}
 	}

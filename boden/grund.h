@@ -192,6 +192,9 @@ protected:
 	// this is the real image calculation, called for the actual ground image
 	virtual void calc_bild_internal() = 0;
 
+	void mark_dirty();
+	void mark_dirty(const obj_t *obj);
+
 public:
 	enum typ { boden = 1, wasser, fundament, tunnelboden, brueckenboden, monorailboden };
 
@@ -250,6 +253,7 @@ public:
 	*/
 	image_id get_back_bild(int leftback) const;
 	virtual void clear_back_bild() {back_bild_nr=0;}
+	sint8 get_back_bild() const { return back_bild_nr; }
 
 	/**
 	* if ground is deleted mark the old spot as dirty
@@ -579,13 +583,13 @@ public:
 
 	inline obj_t *first_obj() const { return objlist.bei(offsets[flags/has_way1]); }
 	obj_t *suche_obj(obj_t::typ typ) const { return objlist.suche(typ,0); }
-	obj_t *obj_remove_top() { return objlist.remove_last(); }
+	obj_t *obj_remove_top() { obj_t *obj = objlist.remove_last(); mark_dirty(obj); return obj; }
 
 	template<typename T> T* find(uint start = 0) const { return static_cast<T*>(objlist.suche(map_obj<T>::code, start)); }
 
-	uint8  obj_add(obj_t *obj) { return objlist.add(obj); }
-	uint8 obj_remove(const obj_t* obj) { return objlist.remove(obj); }
-	bool obj_loesche_alle(spieler_t *sp) { return objlist.loesche_alle(sp,offsets[flags/has_way1]); }
+	uint8  obj_add(obj_t *obj) { mark_dirty(obj); return objlist.add(obj);  }
+	uint8 obj_remove(const obj_t* obj) { mark_dirty(obj); return objlist.remove(obj); }
+	bool obj_loesche_alle(spieler_t *sp) { mark_dirty(); return objlist.loesche_alle(sp,offsets[flags/has_way1]); }
 	bool obj_ist_da(const obj_t* obj) const { return objlist.ist_da(obj); }
 	obj_t * obj_bei(uint8 n) const { return objlist.bei(n); }
 	uint8  obj_count() const { return objlist.get_top()-offsets[flags/has_way1]; }

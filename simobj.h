@@ -59,7 +59,12 @@ private:
 	/**
 	 * y-offset of the object on the tile
 	 */
-	sint8 yoff;
+	sint8 yoff:7;
+
+	/**
+	 * extra flag to mark non-vehicle objects as non-static
+	 */
+	bool non_static:1;
 
 	/**
 	 * Owner of the object (1 - public player, 15 - unowned)
@@ -91,6 +96,8 @@ protected:
 	* @author Hj. Malthaner
 	*/
 	static karte_ptr_t welt;
+
+	inline void set_non_static(bool b) { non_static = b; }
 
 
 public:
@@ -177,6 +184,8 @@ public:
 
 	// true for all moving objects
 	inline bool is_moving() const { return flags&is_vehicle; }
+
+	inline bool is_non_static() const { return non_static; }
 
 	// while in principle, this should trigger the dirty, it takes just too much time to do it
 	// TAKE CARE OF SET IT DIRTY YOURSELF!!!

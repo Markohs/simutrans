@@ -1498,6 +1498,10 @@ void karte_t::init(settings_t* const sets, sint8 const* const h_field)
 
 	recalc_snowline();
 
+	if (view) {
+		view->init_textures();
+	}
+
 	stadt.clear();
 
 DBG_DEBUG("karte_t::init()","hausbauer_t::neue_karte()");
@@ -1957,6 +1961,10 @@ void karte_t::enlarge_map(settings_t const* sets, sint8 const* const h_field)
 	grid_hgts = new_grid_hgts;
 	delete [] water_hgts;
 	water_hgts = new_water_hgts;
+
+	if (view) {
+		view->reset_map();
+	}
 
 	setsimrand(0xFFFFFFFF, settings.get_karte_nummer());
 	clear_random_mode( 0xFFFF );
@@ -3047,6 +3055,12 @@ bool karte_t::ebne_planquadrat(spieler_t *sp, koord k, sint8 hgt, bool keep_wate
 	return ok;
 }
 
+void karte_t::set_grid_hgt(const koord &k, sint8 hgt) {
+	grid_hgts[k.x + k.y*(uint32)(cached_grid_size.x+1)] = hgt;
+	if (view) {
+		view->mark_dirty(k);
+	}
+}
 
 void karte_t::store_player_password_hash( uint8 player_nr, const pwd_hash_t& hash )
 {
@@ -3373,6 +3387,10 @@ DBG_MESSAGE( "karte_t::rotate90()", "called" );
 	world_xy_loop(&karte_t::rotate90_plans, 0);
 
 	grund_t::finish_rotate90();
+
+	if (view) {
+		view->reset_map();
+	}
 
 	delete [] plan;
 	plan = rotate90_new_plan;
@@ -5370,6 +5388,10 @@ void karte_t::load(loadsave_t *file)
 	clear_random_mode(~LOAD_RANDOM);
 	set_random_mode(LOAD_RANDOM);
 	destroy();
+
+	if (view) {
+		view->reset_map();
+	}
 
 	loadingscreen_t ls(translator::translate("Loading map ..."), 1, true, true );
 

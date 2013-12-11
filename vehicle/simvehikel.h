@@ -127,6 +127,8 @@ public:
 	inline void set_bild( image_id b ) { bild = b; }
 	virtual image_id get_bild() const {return bild;}
 
+	sint8 get_dx() const { return dx; }
+	sint8 get_dy() const { return dy; }
 	sint8 get_hoff() const {return hoff;}
 	uint8 get_steps() const {return steps;}
 

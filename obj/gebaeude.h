@@ -139,6 +139,8 @@ public:
 	// caches image at height 0
 	void calc_bild();
 
+	bool is_animated() const { return sync; }
+
 	/**
 	 * @return eigener Name oder Name der Fabrik falls Teil einer Fabrik
 	 * @author Hj. Malthaner

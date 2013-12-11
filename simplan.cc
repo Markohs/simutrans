@@ -11,6 +11,7 @@
 #include "display/simgraph.h"
 #include "simmenu.h"
 #include "simplan.h"
+#include "display/simview.h"
 #include "simwerkz.h"
 #include "simworld.h"
 #include "simhalt.h"
@@ -94,6 +95,11 @@ grund_t *planquadrat_t::get_boden_von_obj(obj_t *obj) const
 void planquadrat_t::boden_hinzufuegen(grund_t *bd)
 {
 	assert(!bd->ist_karten_boden());
+
+	if (welt->get_view()) {
+		welt->get_view()->mark_dirty(bd->get_pos().get_2d());
+	}
+
 	if(ground_size==0) {
 		// completely empty
 		data.one = bd;
@@ -150,6 +156,11 @@ DBG_MESSAGE("planquadrat_t::boden_hinzufuegen()","addition ground %s at (%i,%i,%
 bool planquadrat_t::boden_entfernen(grund_t *bd)
 {
 	assert(!bd->ist_karten_boden()  &&  ground_size>0);
+
+	if (welt->get_view()) {
+		welt->get_view()->mark_dirty(bd->get_pos().get_2d());
+	}
+
 	if(ground_size==1) {
 		ground_size = 0;
 		data.one = NULL;

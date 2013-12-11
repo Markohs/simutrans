@@ -1,0 +1,26 @@
+--- simview.cc	Thu May 30 10:18:45 2013 +0000
++++ simview.cc	Sat Jun 01 14:01:17 2013 +0200
+@@ -24,9 +26,13 @@
+ #include "dataobj/umgebung.h"
+ #include "dings/zeiger.h"
+ 
+-#include "simtools.h"
++#include "simtools.h"
++
++#include "opengl/shaders.h"
+ 
+-karte_ansicht_t::karte_ansicht_t(karte_t *welt)
++matrix_t gl_set_camera_pos(int x, int y);
++
++karte_ansicht_t::karte_ansicht_t(karte_t *welt) : static_geometry(welt, &texture_atlas), dynamic_geometry(welt, &texture_atlas)
+ {
+ 	this->welt = welt;
+ 	outside_visible = true;
+@@ -167,6 +173,7 @@
+ 	int y_min = (-const_y_off + 4*tile_raster_scale_y( min(hmax_ground, welt->get_grundwasser())*TILE_HEIGHT_STEP, IMG_SIZE )
+ 					+ 4*(menu_height-IMG_SIZE)-IMG_SIZE/2-1) / IMG_SIZE;
+ 
++	if( !grund_t::show_grid ) { // Hack
+ #if MULTI_THREAD>1
+ 	if(  umgebung_t::simple_drawing  &&  can_multithreading  ) {
+ 

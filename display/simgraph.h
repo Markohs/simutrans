@@ -15,6 +15,8 @@
 #define simgraph_h
 
 #include "../simcolor.h"
+#include "../simconst.h"
+#include "../simtypes.h"
 #include "../unicode.h"
 #include "../simtypes.h"
 #include "simimg.h"
@@ -498,6 +500,8 @@ void display_snapshot( int x, int y, int w, int h );
 #if COLOUR_DEPTH != 0
 extern COLOR_VAL display_day_lights[  LIGHT_COUNT * 3];
 extern COLOR_VAL display_night_lights[LIGHT_COUNT * 3];
+extern const COLOR_VAL special_pal[224*3];
+extern uint8 player_offsets[MAX_PLAYER_COUNT][2];
 #endif
 
 #endif

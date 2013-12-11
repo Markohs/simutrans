@@ -35,6 +35,7 @@ crossing_t::crossing_t(loadsave_t* const file) : obj_no_info_t()
 	bild = after_bild = IMG_LEER;
 	logic = NULL;
 	rdwr(file);
+	set_non_static(true);
 }
 
 
@@ -46,6 +47,7 @@ crossing_t::crossing_t(spieler_t* const sp, koord3d const pos, kreuzung_besch_t 
 	zustand = crossing_logic_t::CROSSING_INVALID;
 	bild = after_bild = IMG_LEER;
 	set_besitzer( sp );
+	set_non_static(true);
 }
 
 

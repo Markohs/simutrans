@@ -42,6 +42,7 @@ wolke_t::wolke_t(koord3d pos, sint8 x_off, sint8 y_off, const skin_besch_t* besc
 	set_xoff( (x_off*OBJECT_OFFSET_STEPS)/16 );
 	set_yoff( base_y_off );
 	insta_zeit = 0;
+	set_non_static(true);
 }
 
 
@@ -61,6 +62,7 @@ wolke_t::~wolke_t()
 wolke_t::wolke_t(loadsave_t* const file) : obj_no_info_t()
 {
 	rdwr(file);
+	set_non_static(true);
 }
 
 

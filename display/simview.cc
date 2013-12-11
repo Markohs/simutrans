@@ -6,6 +6,8 @@
 
 #include <stdio.h>
 
+#include <GL/glew.h>
+
 #include "../simworld.h"
 #include "simview.h"
 #include "simgraph.h"
@@ -24,8 +26,11 @@
 #include "../obj/zeiger.h"
 
 #include "../simtools.h"
+#include "../opengl/shaders.h"
 
-karte_ansicht_t::karte_ansicht_t(karte_t *welt)
+matrix_t gl_set_camera_pos(int x, int y);
+
+karte_ansicht_t::karte_ansicht_t(karte_t *welt) : static_geometry(welt, &texture_atlas), dynamic_geometry(welt, &texture_atlas)
 {
 	this->welt = welt;
 	outside_visible = true;
@@ -166,6 +171,7 @@ void karte_ansicht_t::display(bool force_dirty)
 	int y_min = (-const_y_off + 4*tile_raster_scale_y( min(hmax_ground, welt->get_grundwasser())*TILE_HEIGHT_STEP, IMG_SIZE )
 					+ 4*(menu_height-IMG_SIZE)-IMG_SIZE/2-1) / IMG_SIZE;
 
+	if( !grund_t::show_grid ) { // Hack
 #ifdef MULTI_THREAD
 	if(  can_multithreading  ) {
 		if(  !spawned_threads  ) {
@@ -256,6 +262,7 @@ void karte_ansicht_t::display(bool force_dirty)
 			}
 		}
 	}
+	}
 
 	obj_t *zeiger = welt->get_zeiger();
 	DBG_DEBUG4("karte_ansicht_t::display", "display pointer");
@@ -302,6 +309,38 @@ void karte_ansicht_t::display(bool force_dirty)
 			}
 		}
 	}
+
+	const koord cpos = -welt->get_viewport()->get_world_position() - welt->get_viewport()->get_viewport_ij_offset();
+	const sint16 cx = (cpos.x-cpos.y)*(IMG_SIZE/2) + const_x_off + (IMG_SIZE/2);
+	const sint16 cy = (cpos.x+cpos.y)*(IMG_SIZE/4) + ((display_get_width()/IMG_SIZE)&1)*(IMG_SIZE/4) + const_y_off - (get_base_tile_raster_width() - IMG_SIZE)/2;
+	const matrix_t view_transform = gl_set_camera_pos(-cx, -cy - menu_height);
+
+	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+	glEnable(GL_ALPHA_TEST);
+	glAlphaFunc(GL_GREATER, 0.0f);
+//	glPolygonMode(GL_FRONT_AND_BACK , GL_LINE);
+	glActiveTexture(GL_TEXTURE0);
+	glEnable(GL_TEXTURE_2D);
+	glActiveTexture(GL_TEXTURE1);
+	glEnable(GL_TEXTURE_2D);
+	glActiveTexture(GL_TEXTURE2);
+	glEnable(GL_TEXTURE_2D);
+
+	select_geometry_program(0, 1, 2);
+
+	static_geometry.display(view_transform, display_get_width(), display_get_height());
+	dynamic_geometry.display(view_transform, display_get_width(), display_get_height(), static_geometry.get_visibility());
+
+//	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	glDisable(GL_ALPHA_TEST);
+	glActiveTexture(GL_TEXTURE2);
+	glDisable(GL_TEXTURE_2D);
+	glActiveTexture(GL_TEXTURE1);
+	glDisable(GL_TEXTURE_2D);
+	glActiveTexture(GL_TEXTURE0);
+	// Leave GL_TEXTURE_2D on GL_TEXTURE0 enabled
+
+	glUseProgram(0);
 
 	assert( rs == get_random_seed() );
 
@@ -555,4 +594,24 @@ void karte_ansicht_t::display_background( KOORD_VAL xp, KOORD_VAL yp, KOORD_VAL 
 	if(  !(env_t::draw_earth_border  &&  env_t::draw_outside_tile)  ) {
 		display_fillbox_wh(xp, yp, w, h, env_t::background_color, dirty );
 	}
+}
+
+matrix_t gl_set_camera_pos(int camera_x, int camera_y) {
+	static const matrix_t base(
+		 0.50f, -0.25f,  0.25f,  0.00f,            // 2D Inverse: 1, -1
+		-0.50f, -0.25f,  0.25f,  0.00f,            //            -2, -2
+		 0.00f,  1.00f,  0.00f,  0.00f,
+		 0.00f,  0.00f,  0.00f,  1.00f
+	);
+
+	const float xy_scale = get_tile_raster_width();
+	const float z_scale = (float) tile_raster_scale_y(TILE_HEIGHT_STEP, get_tile_raster_width());
+	const matrix_t view_transform = matrix_t::scale(xy_scale, xy_scale, z_scale) * base * matrix_t::translate(-camera_x, camera_y, -camera_y - display_get_height());
+
+	glMatrixMode(GL_PROJECTION);
+	glOrtho(0.0, display_get_width(), -display_get_height(), 0.0, display_get_height() * 0.1f, display_get_height() * 0.9f);
+	glMatrixMode(GL_MODELVIEW);
+	glLoadMatrixf(&view_transform.m[0][0]);
+
+	return view_transform;
 }

@@ -1641,7 +1641,7 @@ public:
 	 */
 	void set_grid_hgt(sint16 x, sint16 y, sint8 hgt) { grid_hgts[x + y*(uint32)(cached_grid_size.x+1)] = hgt; }
 
-	inline void set_grid_hgt(koord k, sint8 hgt) { set_grid_hgt(k.x, k.y, hgt); }
+	void set_grid_hgt(const koord &k, sint8 hgt);
 
 
 private:

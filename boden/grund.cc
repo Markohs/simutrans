@@ -14,6 +14,7 @@
 #include "../simhalt.h"
 #include "../display/simimg.h"
 #include "../player/simplay.h"
+#include "../display/simview.h"
 #include "../gui/simwin.h"
 #include "../simworld.h"
 
@@ -2025,4 +2026,15 @@ wayobj_t *grund_t::get_wayobj( waytype_t wt ) const
 		}
 	}
 	return NULL;
+}
+
+void grund_t::mark_dirty() {
+	welt->get_view()->mark_dirty(pos.get_2d());
+}
+
+void grund_t::mark_dirty(const obj_t *obj) {
+	// Moving things are not part of static stuff, as thus should not cause it to become dirty
+	if (!obj->is_moving() && !obj->is_non_static()) {
+		mark_dirty();
+	}
 }
