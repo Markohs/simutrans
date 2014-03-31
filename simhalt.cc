@@ -63,7 +63,7 @@
 
 karte_ptr_t haltestelle_t::welt;
 
-slist_tpl<halthandle_t> haltestelle_t::alle_haltestellen;
+vector_tpl<halthandle_t> haltestelle_t::alle_haltestellen;
 
 stringhashtable_tpl<halthandle_t> haltestelle_t::all_names;
 
@@ -103,7 +103,7 @@ void haltestelle_t::step_all()
 		}
 	}
 
-	static slist_tpl<halthandle_t>::iterator iter( alle_haltestellen.begin() );
+	static vector_tpl<halthandle_t>::iterator iter( alle_haltestellen.begin() );
 	if (alle_haltestellen.empty()) {
 		return;
 	}
@@ -324,7 +324,7 @@ void haltestelle_t::destroy(halthandle_t const halt)
 void haltestelle_t::destroy_all()
 {
 	while (!alle_haltestellen.empty()) {
-		halthandle_t halt = alle_haltestellen.front();
+		halthandle_t halt = alle_haltestellen.back();
 		destroy(halt);
 	}
 	if (all_koords) {
@@ -1231,7 +1231,7 @@ void haltestelle_t::fill_connected_component(uint8 catg_idx, uint16 comp)
 void haltestelle_t::rebuild_connected_components()
 {
 	for(uint8 catg_idx = 0; catg_idx<warenbauer_t::get_max_catg_index(); catg_idx++) {
-		FOR(slist_tpl<halthandle_t>, halt, alle_haltestellen) {
+		FOR(vector_tpl<halthandle_t>, halt, alle_haltestellen) {
 			if (halt->all_links[catg_idx].catg_connected_component == UNDECIDED_CONNECTED_COMPONENT) {
 				// start recursion
 				halt->fill_connected_component(catg_idx, halt.get_id());
@@ -2632,10 +2632,11 @@ void haltestelle_t::rdwr(loadsave_t *file)
 					ware_t ware(file);
 					if(  ware.menge>0  &&  welt->is_within_limits(ware.get_zielpos())  ) {
 						add_ware_to_halt(ware);
-						if(  file->get_version() <= 112000  ) {
+#ifdef CACHE_TRANSIT
+						if(  file->get_version() <= 112000  )
+#endif
 							// restore intransit information
 							fabrik_t::update_transit( &ware, true );
-						}
 					}
 					else if(  ware.menge>0  ) {
 						dbg->error( "haltestelle_t::rdwr()", "%i of %s to %s ignored!", ware.menge, ware.get_name(), ware.get_zielpos().get_str() );
@@ -2822,7 +2823,7 @@ void haltestelle_t::recalc_status()
 			long ware_sum = get_ware_summe(wtyp);
 			total_sum += ware_sum;
 			if(ware_sum>max_ware) {
-				status_bits |= ware_sum > max_ware + 32 || enables & CROWDED ? 2 : 1;
+				status_bits |= ware_sum > max_ware + 32 /*|| enables & CROWDED*/ ? 2 : 1; // for now report only serious overcrowding on transfer stops
 				overcrowded[wtyp->get_catg_index()/8] |= 1<<(wtyp->get_catg_index()%8);
 			}
 		}

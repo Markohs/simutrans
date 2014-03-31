@@ -40,7 +40,7 @@ class weg_besch_t : public obj_besch_transport_infrastructure_t {
 	friend class way_reader_t;
 
 public:
-	enum { elevated=1, joined=7 /* only tram */, special=255 };
+	enum { elevated=1, runway = 1, joined=7 /* only tram */, special=255 };
 
 private:
 
@@ -171,7 +171,7 @@ public:
 				return IMG_LEER;
 		}
 		image_id hang_img = get_child<bildliste_besch_t>(n)->get_bild_nr(nr);
-		if(  nr > 3  &&  hang_img == IMG_LEER  ) {
+		if(  nr > 3  &&  hang_img == IMG_LEER  &&  get_child<bildliste_besch_t>(n)->get_anzahl()<=4  ) {
 			// hack for old ways without double height images to use single slope images for both
 			nr -= 4;
 			hang_img = get_child<bildliste_besch_t>(n)->get_bild_nr(nr);

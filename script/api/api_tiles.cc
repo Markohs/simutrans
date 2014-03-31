@@ -181,12 +181,12 @@ void export_tiles(HSQUIRRELVM vm)
 	 * List to iterate through all objects on this tile.
 	 * @code
 	 * t= tile_x(47,11)
-	 * foreach(obj in t.objects) {
+	 * foreach(obj in t.get_objects()) {
 	 *    ...
 	 * }
 	 * @endcode
 	 */
-	tile_object_list_x objects;
+	tile_object_list_x get_objects();
 #endif
 
 	end_class(vm);
@@ -194,7 +194,7 @@ void export_tiles(HSQUIRRELVM vm)
 	/**
 	 * Class that holds an iterator through the list of objects on a particular tile.
 	 *
-	 * For an example see tile_x::objects.
+	 * For an example see tile_x.
 	 */
 	begin_class(vm, "tile_object_list_x", "coord3d");
 	/**

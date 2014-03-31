@@ -402,7 +402,7 @@ DBG_MESSAGE("wkz_remover_intern()","at (%s)", pos.get_str());
 	}
 
 	// check if there is something to remove from here ...
-	if(gr->get_top()==0  ) {
+	if(  gr->get_top()==0  ) {
 		msg = "";
 		return false;
 	}
@@ -432,7 +432,7 @@ DBG_MESSAGE("wkz_remover_intern()","at (%s)", pos.get_str());
 
 	// pedestrians?
 	fussgaenger_t* fussgaenger = gr->find<fussgaenger_t>();
-	if (fussgaenger) {
+	if(fussgaenger) {
 		delete fussgaenger;
 		return true;
 	}
@@ -460,7 +460,7 @@ DBG_MESSAGE("wkz_remover_intern()","at (%s)", pos.get_str());
 		}
 		if(gr->ist_tunnel()  &&  gr->ist_karten_boden()) {
 			if (gr->find<tunnel_t>()->get_besch()->get_waytype()==powerline_wt) {
-				msg = tunnelbauer_t::remove(sp, gr->get_pos(), powerline_wt );
+				msg = tunnelbauer_t::remove(sp, gr->get_pos(), powerline_wt, is_ctrl_pressed() );
 				return msg == NULL;
 			}
 		}
@@ -547,7 +547,7 @@ DBG_MESSAGE("wkz_remover()",  "removing bridge from %d,%d,%d",gr->get_pos().x, g
 	// beginning/end of tunnel
 	if(gr->ist_tunnel()  &&  gr->ist_karten_boden()) {
 DBG_MESSAGE("wkz_remover()",  "removing tunnel  from %d,%d,%d",gr->get_pos().x, gr->get_pos().y, gr->get_pos().z);
-		msg = tunnelbauer_t::remove(sp, gr->get_pos(), gr->get_weg_nr(0)->get_waytype());
+		msg = tunnelbauer_t::remove(sp, gr->get_pos(), gr->get_weg_nr(0)->get_waytype(), is_ctrl_pressed());
 		return msg == NULL;
 	}
 
@@ -698,11 +698,9 @@ DBG_MESSAGE("wkz_remover()", "removing way");
 		if(  weg_t *weg = gr->get_weg_nr(0)  ) {
 			gr->remove_everything_from_way(sp, weg->get_waytype(), ribi_t::keine);
 		}
-		// delete tunnel here - if there is lonely tunnel without way
-		if(  gr->get_top()==1  ) {
-			tunnel_t *t = gr->find<tunnel_t>();
-			t->entferne(sp);
-			delete t;
+		// tunnel without way: delete anything else
+		if(  !gr->hat_wege()  ) {
+			gr->obj_loesche_alle(sp);
 		}
 	}
 
@@ -1557,6 +1555,10 @@ const char *wkz_add_city_t::work( spieler_t *sp, koord3d pos )
 
 				// always start with 1/10 citicens
 				stadt_t* stadt = new stadt_t(welt->get_spieler(1), k, citizens / 10);
+				if (stadt->get_buildings() == 0) {
+					delete stadt;
+					return "No suitable ground!";
+				}
 
 				welt->add_stadt(stadt);
 				stadt->laden_abschliessen();
@@ -1651,8 +1653,9 @@ const char *wkz_change_city_size_t::work( spieler_t *, koord3d pos )
  */
 const char *wkz_set_climate_t::get_tooltip(spieler_t const*) const
 {
-	sprintf( werkzeug_t::toolstr, translator::translate( "Set tile climate" ), translator::translate( grund_besch_t::get_climate_name_from_bit((climate)atoi(default_param)) ) );
-	return werkzeug_t::toolstr;
+	char temp[1024];
+	sprintf( temp, translator::translate( "Set tile climate" ), translator::translate( grund_besch_t::get_climate_name_from_bit((climate)atoi(default_param)) ) );
+	return tooltip_with_price( temp,  welt->get_settings().cst_alter_climate );
 }
 
 uint8 wkz_set_climate_t::is_valid_pos(spieler_t *, const koord3d &, const char *&, const koord3d &)
@@ -2355,9 +2358,9 @@ const char *wkz_brueckenbau_t::do_work( spieler_t *sp, const koord3d &start, con
 	}
 }
 
-void wkz_brueckenbau_t::rdwr_custom_data(uint8 player_nr, memory_rw_t *packet)
+void wkz_brueckenbau_t::rdwr_custom_data(memory_rw_t *packet)
 {
-	two_click_werkzeug_t::rdwr_custom_data(player_nr, packet);
+	two_click_werkzeug_t::rdwr_custom_data(packet);
 	uint8 i = ribi;
 	packet->rdwr_byte(i);
 	ribi = (ribi_t::ribi)i;
@@ -3648,7 +3651,7 @@ DBG_MESSAGE("wkz_dockbau()","building dock from square (%d,%d) to (%d,%d)", k.x,
 }
 
 // build all types of stops but sea harbours
-const char *wkz_station_t::wkz_station_aux(spieler_t *sp, koord3d pos, const haus_besch_t *besch, waytype_t wegtype, sint64 cost, const char *type_name )
+const char *wkz_station_t::wkz_station_aux(spieler_t *sp, koord3d pos, const haus_besch_t *besch, waytype_t wegtype, const char *type_name )
 {
 	koord k = pos.get_2d();
 DBG_MESSAGE("wkz_halt_aux()", "building %s on square %d,%d for waytype %x", besch->get_name(), k.x, k.y, wegtype);
@@ -3797,21 +3800,21 @@ DBG_MESSAGE("wkz_halt_aux()", "building %s on square %d,%d for waytype %x", besc
 	}
 
 	halthandle_t old_halt = bd->get_halt();
-	uint16 old_level = 0;
+	sint64 old_cost = 0;
 
 	halthandle_t halt;
 
 	if(  old_halt.is_bound()  ) {
 		gebaeude_t* gb = bd->find<gebaeude_t>();
 		const haus_besch_t *old_besch = gb->get_tile()->get_besch();
-		old_level = old_besch->get_level();
 		if(  old_besch == besch  ) {
 			// already has the same station
 			return NULL;
 		}
-		if(  old_besch->get_level() >= besch->get_level()  &&  !is_ctrl_pressed()  ) {
+		if(  old_besch->get_capacity() >= besch->get_capacity()  &&  !is_ctrl_pressed()  ) {
 			return "Upgrade must have\na higher level";
 		}
+		old_cost = old_besch->get_price(welt)*old_besch->get_b()*old_besch->get_h();
 		gb->entferne( NULL );
 		delete gb;
 		halt = old_halt;
@@ -3838,8 +3841,9 @@ DBG_MESSAGE("wkz_halt_aux()", "building %s on square %d,%d for waytype %x", besc
 		free(name);
 	}
 
-	sint64 old_cost = old_level * cost;
-	cost *= besch->get_b()*besch->get_h();
+	// cost to build new station
+	sint64 cost = -besch->get_price(welt)*besch->get_b()*besch->get_h();
+	// discount for existing station
 	cost += old_cost/2;
 	if(  sp!=halt->get_besitzer() && sp != welt->get_spieler(1)  ) {
 		// public stops are expensive!
@@ -4074,23 +4078,22 @@ const char *wkz_station_t::work( spieler_t *sp, koord3d pos )
 			}
 			break;
 		case haus_besch_t::generic_stop: {
-			sint64 cost = -besch->get_price(welt);
 			switch(besch->get_extra()) {
 				case road_wt:
-					msg = wkz_station_t::wkz_station_aux(sp, pos, besch, road_wt, cost, "H");
+					msg = wkz_station_t::wkz_station_aux(sp, pos, besch, road_wt, "H");
 					break;
 				case track_wt:
 				case monorail_wt:
 				case maglev_wt:
 				case narrowgauge_wt:
 				case tram_wt:
-					msg = wkz_station_t::wkz_station_aux(sp, pos, besch, (waytype_t)besch->get_extra(), cost, "BF");
+					msg = wkz_station_t::wkz_station_aux(sp, pos, besch, (waytype_t)besch->get_extra(), "BF");
 					break;
 				case water_wt:
-					msg = wkz_station_t::wkz_station_aux(sp, pos, besch, water_wt, cost, "Dock");
+					msg = wkz_station_t::wkz_station_aux(sp, pos, besch, water_wt, "Dock");
 					break;
 				case air_wt:
-					msg = wkz_station_t::wkz_station_aux(sp, pos, besch, air_wt, cost, "Airport");
+					msg = wkz_station_t::wkz_station_aux(sp, pos, besch, air_wt, "Airport");
 					break;
 			}
 			break;
@@ -4136,19 +4139,26 @@ const char* wkz_roadsign_t::check_pos_intern(spieler_t *sp, koord3d pos)
 	// search for starting ground
 	grund_t *gr = wkz_intern_koord_to_weg_grund(sp, welt, pos, besch->get_wtyp());
 	if(gr) {
-		// get the sign direction
-		weg_t *weg = gr->get_weg( besch->get_wtyp()!=tram_wt ? besch->get_wtyp() : track_wt);
+
 		signal_t *s = gr->find<signal_t>();
 		if(s  &&  s->get_besch()!=besch) {
 			// only one sign per tile
 			return error;
 		}
+
 		if(besch->is_signal()  &&  gr->find<roadsign_t>())  {
 			// only one sign per tile
 			return error;
 		}
 
+		// get the sign direction
+		weg_t *weg = gr->get_weg( besch->get_wtyp()!=tram_wt ? besch->get_wtyp() : track_wt);
 		ribi_t::ribi dir = weg->get_ribi_unmasked();
+
+		// no signs on runways
+		if(  weg->get_waytype() == air_wt  &&  weg->get_besch()->get_styp() == weg_besch_t::runway  ) {
+			return error;
+		}
 
 		// no signals on switches
 		if(  ribi_t::is_threeway(dir)  &&  besch->is_signal_type()  ) {
@@ -4323,13 +4333,14 @@ void wkz_roadsign_t::mark_tiles( spieler_t *sp, const koord3d &start, const koor
 
 		weg_t *weg = gr->get_weg(besch->get_wtyp());
 		ribi_t::ribi ribi=weg->get_ribi_unmasked(); // set full ribi when signal is on a crossing.
-		if(  single_ribi  &&  ribi_t::is_twoway(weg->get_ribi_unmasked()) ) {
-			// clear one direction bit to get single direction for signal
-			if(i < route.get_count()-1  ) {
-				ribi &= ~ribi_typ(route.position_bei(i), route.position_bei(i+1));
+		if(  single_ribi  ) {
+			if(i>0) {
+				// take backward direction
+				ribi = ribi_typ(route.position_bei(i), route.position_bei(i-1));
 			}
-			else if(i>0) {
-				ribi &= ~ribi_typ(route.position_bei(i-1), route.position_bei(i));
+			else {
+				// clear one direction bit to get single direction for signal
+				ribi &= ~ribi_typ(route.position_bei(i), route.position_bei(i+1));
 			}
 		}
 

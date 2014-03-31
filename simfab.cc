@@ -134,6 +134,7 @@ void ware_production_t::rdwr(loadsave_t *file)
 {
 	if(  file->is_loading()  ) {
 		init_stats();
+		max_transit = 0;
 	}
 
 	if(  file->get_version()>112000  ) {
@@ -143,6 +144,11 @@ void ware_production_t::rdwr(loadsave_t *file)
 			}
 		}
 		file->rdwr_longlong( weighted_sum_storage );
+#ifndef CACHE_TRANSIT
+		// recalc transit always on load
+		transit = 0;
+		statistics[0][FAB_GOODS_TRANSIT] = 0;
+#endif
 	}
 	else if(  file->get_version()>=110005  ) {
 		// save/load statistics
@@ -1309,9 +1315,15 @@ sint8 fabrik_t::is_needed(const ware_besch_t *typ) const
 {
 	FOR(array_tpl<ware_production_t>, const& i, eingang) {
 		if(  i.get_typ() == typ  ) {
-			// not needed (false) if overflowing or too much already sent
-			const bool transit_ok = welt->get_settings().get_factory_maximum_intransit_percentage() == 0 ? true : (i.transit * 100) < ((i.max >> fabrik_t::precision_bits) * welt->get_settings().get_factory_maximum_intransit_percentage());
-			return (i.menge < i.max)  &&  transit_ok;
+			// not needed (false) if overflowing ...
+			if(  i.menge >= i.max  ) {
+				return false;
+			}
+			// ...  or too much already sent
+			if(  i.transit >= i.max_transit  &&  welt->get_settings().get_factory_maximum_intransit_percentage()  ) {
+				return false;
+			}
+			return true;
 		}
 	}
 	return -1;  // not needed here
@@ -1873,7 +1885,8 @@ void fabrik_t::recalc_factory_status()
 		else {
 			status = good;
 		}
-	} else if(  ausgang.empty()  ) {
+	}
+	else if(  ausgang.empty()  ) {
 		// nothing to produce
 
 		if(status_ein&FL_WARE_ALLELIMIT) {
@@ -1963,14 +1976,27 @@ void fabrik_t::info_prod(cbuffer_t& buf) const
 
 		for (uint32 index = 0; index < eingang.get_count(); index++) {
 
-			buf.printf("\n - %s %u/%i/%u%s, %u%%",
-				translator::translate(eingang[index].get_typ()->get_name()),
-				(sint32)(0.5+eingang[index].menge / (double)(1<<fabrik_t::precision_bits)),
-				eingang[index].transit,
-				(eingang[index].max >> fabrik_t::precision_bits),
-				translator::translate(eingang[index].get_typ()->get_mass()),
-				(sint32)(0.5+(besch->get_lieferant(index)->get_verbrauch()*100l)/256.0)
-			);
+			if(  welt->get_settings().get_factory_maximum_intransit_percentage()  ) {
+				buf.printf("\n - %s %u/%i(%i)/%u%s, %u%%",
+					translator::translate(eingang[index].get_typ()->get_name()),
+					(sint32)(0.5+eingang[index].menge / (double)(1<<fabrik_t::precision_bits)),
+					eingang[index].transit,
+					eingang[index].max_transit,
+					(eingang[index].max >> fabrik_t::precision_bits),
+					translator::translate(eingang[index].get_typ()->get_mass()),
+					(sint32)(0.5+(besch->get_lieferant(index)->get_verbrauch()*100l)/256.0)
+				);
+			}
+			else {
+				buf.printf("\n - %s %u/%i/%u%s, %u%%",
+					translator::translate(eingang[index].get_typ()->get_name()),
+					(sint32)(0.5+eingang[index].menge / (double)(1<<fabrik_t::precision_bits)),
+					eingang[index].transit,
+					(eingang[index].max >> fabrik_t::precision_bits),
+					translator::translate(eingang[index].get_typ()->get_mass()),
+					(sint32)(0.5+(besch->get_lieferant(index)->get_verbrauch()*100l)/256.0)
+				);
+			}
 		}
 	}
 }
@@ -2045,25 +2071,6 @@ void fabrik_t::info_conn(cbuffer_t& buf) const
 
 void fabrik_t::laden_abschliessen()
 {
-	if (welt->get_settings().is_crossconnect_factories()) {
-		add_all_suppliers();
-	}
-	else {
-		for(uint32 i=0; i<lieferziele.get_count(); i++) {
-			fabrik_t * fab2 = fabrik_t::get_fab(lieferziele[i]);
-			if (fab2) {
-				fab2->add_supplier(pos.get_2d());
-				lieferziele[i] = fab2->get_pos().get_2d();
-			}
-			else {
-				// remove this ...
-				dbg->warning( "fabrik_t::laden_abschliessen()", "No factory at expected position %s!", lieferziele[i].get_str() );
-				lieferziele.remove_at(i);
-				i--;
-			}
-		}
-	}
-
 	// adjust production base to be at least as large as fields productivity
 	uint32 prodbase_adjust = 1;
 	const field_group_besch_t *fb = besch->get_field_group();
@@ -2075,8 +2082,30 @@ void fabrik_t::laden_abschliessen()
 			}
 		}
 	}
+
 	// set production, update all production related numbers
 	set_base_production( max(prodbase, prodbase_adjust) );
+
+	// now we have a valid storage limit
+	if (welt->get_settings().is_crossconnect_factories()) {
+		add_all_suppliers();
+	}
+	else {
+		// add as supplier to target(s)
+		for(uint32 i=0; i<lieferziele.get_count(); i++) {
+			fabrik_t * fab2 = fabrik_t::get_fab(lieferziele[i]);
+			if(fab2) {
+				fab2->add_supplier(pos.get_2d());
+				lieferziele[i] = fab2->get_pos().get_2d();
+			}
+			else {
+				// remove this ...
+				dbg->warning( "fabrik_t::laden_abschliessen()", "No factory at expected position %s!", lieferziele[i].get_str() );
+				lieferziele.remove_at(i);
+				i--;
+			}
+		}
+	}
 }
 
 
@@ -2101,6 +2130,30 @@ void fabrik_t::rotate90( const sint16 y_size )
 
 void fabrik_t::add_supplier(koord ziel)
 {
+	if(  welt->get_settings().get_factory_maximum_intransit_percentage()  &&  !suppliers.is_contained(ziel)  ) {
+		if(  fabrik_t *fab = get_fab( ziel )  ) {
+			for(  uint32 i=0;  i < fab->get_ausgang().get_count();  i++   ) {
+				const ware_production_t &w_out = fab->get_ausgang()[i];
+				// now update transit limits
+				FOR(  array_tpl<ware_production_t>,  &w,  eingang ) {
+					if(  w_out.get_typ() == w.get_typ()  ) {
+#ifdef TRANSIT_DISTANCE
+						sint64 distance = koord_distance( fab->get_pos(), get_pos() );
+						// calculate next mean by the following formula: average + (next - average)/(n+1)
+						w.count_suppliers ++;
+						sint64 next = 1 + ( distance * welt->get_settings().get_factory_maximum_intransit_percentage() * (w.max >> fabrik_t::precision_bits) ) / 131072;
+						w.max_transit += (next - w.max_transit)/(w.count_suppliers);
+#else
+						sint32 max_storage = 1 + ( (w_out.max * welt->get_settings().get_factory_maximum_intransit_percentage() ) >> fabrik_t::precision_bits) / 100;
+						w.max_transit += max_storage;
+#endif
+						break;
+					}
+				}
+			}
+			// since there could be more than one good, we have to iterate over all of them
+		}
+	}
 	suppliers.insert_unique_ordered( ziel, RelativeDistanceOrdering(pos.get_2d()) );
 }
 
@@ -2108,12 +2161,47 @@ void fabrik_t::add_supplier(koord ziel)
 void fabrik_t::rem_supplier(koord pos)
 {
 	suppliers.remove(pos);
+
+	if(  welt->get_settings().get_factory_maximum_intransit_percentage()  ) {
+		// set to zero
+		FOR(  array_tpl<ware_production_t>,  &w,  eingang ) {
+			w.max_transit = 0;
+		}
+
+		// unfourtunately we have to bite the bullet and recalc the values from scratch ...
+		FOR( vector_tpl<koord>, ziel, suppliers ) {
+			if(  fabrik_t *fab = get_fab( ziel )  ) {
+				for(  uint32 i=0;  i < fab->get_ausgang().get_count();  i++   ) {
+					const ware_production_t &w_out = fab->get_ausgang()[i];
+					// now update transit limits
+					FOR(  array_tpl<ware_production_t>,  &w,  eingang ) {
+						if(  w_out.get_typ() == w.get_typ()  ) {
+#ifdef TRANSIT_DISTANCE
+							sint64 distance = koord_distance( fab->get_pos(), get_pos() );
+							// calculate next mean by the following formula: average + (next - average)/(n+1)
+							w.count_suppliers ++;
+							sint64 next = 1 + ( distance * welt->get_settings().get_factory_maximum_intransit_percentage() * (w.max >> fabrik_t::precision_bits) ) / 131072;
+							w.max_transit += (next - w.max_transit)/(w.count_suppliers);
+#else
+							sint32 max_storage = 1 + ( (w_out.max * welt->get_settings().get_factory_maximum_intransit_percentage() ) >> fabrik_t::precision_bits) / 100;
+							w.max_transit += max_storage;
+#endif
+							break;
+						}
+					}
+				}
+				// since there could be more than one good, we have to iterate over all of them
+			}
+		}
+	}
 }
 
 
 /** crossconnect everything possible */
 void fabrik_t::add_all_suppliers()
 {
+	lieferziele.clear();
+	suppliers.clear();
 	for(int i=0; i < besch->get_lieferanten(); i++) {
 		const fabrik_lieferant_besch_t *lieferant = besch->get_lieferant(i);
 		const ware_besch_t *ware = lieferant->get_ware();
@@ -2141,7 +2229,7 @@ bool fabrik_t::add_supplier(fabrik_t* fab)
 		const ware_besch_t *ware = lieferant->get_ware();
 
 			// connect to an existing one, if this is an producer
-			if(fab!=this  &&  fab->vorrat_an(ware) > -1) {
+			if(  fab!=this  &&  fab->vorrat_an(ware) > -1  ) {
 				// add us to this factory
 				fab->add_lieferziel(pos.get_2d());
 				return true;

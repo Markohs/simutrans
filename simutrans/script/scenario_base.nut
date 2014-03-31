@@ -79,6 +79,10 @@ function get_short_description(pl)
 {
 	return scenario.short_description;
 }
+function get_api_version()
+{
+	return ("api" in scenario) ? scenario.api : "112.3"
+}
 function get_about_text(pl)
 {
 	return "<em>Scenario:</em>  " +  scenario.short_description
@@ -108,6 +112,16 @@ function start()
 function resume_game()
 {
 	start()
+}
+
+/**
+ * Happy New Month and Year!
+ */
+function new_month()
+{
+}
+function new_year()
+{
 }
 
 /**
@@ -397,6 +411,27 @@ class halt_x extends extend_get {
 	}
 }
 
+
+/**
+ * class that contains data to get access to a line of convoys
+ */
+class line_x extends extend_get {
+	id = 0 /// linehandle_t
+
+	constructor(i_) {
+		id = i_
+	}
+}
+
+/**
+ * class to provide access to line lists
+ */
+class line_list_x {
+
+	halt_id = 0
+	player_id = 0
+}
+
 /**
  * class that contains data to get access to a tile (grund_t)
  */
@@ -447,17 +482,13 @@ class square_x extends extend_get {
 
 
 /**
- * class to provide access to the game's list of all convoys
+ * class to provide access to convoy lists
  */
 class convoy_list_x {
 
-	/// meta-method to be called in a foreach loop
-	function _nexti(prev_index) {
-	}
-
-	/// meta method to retrieve convoy by index in the global C++ array
-	function _get(index) {
-	}
+	use_world = 0
+	halt_id = 0
+	line_id = 0
 }
 
 
@@ -516,13 +547,6 @@ class map_object_x extends extend_get {
 	x = -1
 	y = -1
 	z = -1
-
-	// do not call this directly
-	constructor(x_, y_, z_) {
-		x = x_
-		y = y_
-		z = z_
-	}
 }
 
 class schedule_x {
@@ -583,6 +607,12 @@ class time_x {
 	raw = 1
 	year = 0
 	month = 1
+}
+
+class time_ticks_x extends time_x {
+	ticks = 0
+	ticks_per_month = 0
+	next_month_ticks = 0
 }
 
 class coord {

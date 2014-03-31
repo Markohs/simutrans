@@ -224,11 +224,11 @@ void modal_dialogue( gui_frame_t *gui, ptrdiff_t magic, karte_t *welt, bool (*qu
 				DBG_DEBUG4("zeige_banner", "calling win_poll_event");
 				win_poll_event(&ev);
 				// no toolbar events
-				if(  ev.my < werkzeug_t::toolbar_tool[0]->iconsize.h  ) {
-					ev.my = werkzeug_t::toolbar_tool[0]->iconsize.h;
+				if(  ev.my < env_t::iconsize.h  ) {
+					ev.my = env_t::iconsize.h;
 				}
-				if(  ev.cy < werkzeug_t::toolbar_tool[0]->iconsize.h  ) {
-					ev.cy = werkzeug_t::toolbar_tool[0]->iconsize.h;
+				if(  ev.cy < env_t::iconsize.h  ) {
+					ev.cy = env_t::iconsize.h;
 				}
 				if(  ev.ev_class == EVENT_KEYBOARD  &&  ev.ev_code == SIM_KEY_F1  ) {
 					if(  gui_frame_t *win = win_get_top()  ) {
@@ -705,12 +705,22 @@ int simu_main(int argc, char** argv)
 	bool themes_ok = false;
 	if(  const char *themestr = gimme_arg(argc, argv, "-theme", 1)  ) {
 		chdir( env_t::user_dir );
+		chdir( "themes" );
 		themes_ok = gui_theme_t::themes_init(themestr);
+		if(  !themes_ok  ) {
+			chdir( env_t::program_dir );
+			chdir( "themes" );
+			themes_ok = gui_theme_t::themes_init(themestr);
+		}
 	}
+	// specified themes not found => try default themes
 	if(  !themes_ok  ) {
 		chdir( env_t::program_dir );
 		chdir( "themes" );
 		themes_ok = gui_theme_t::themes_init("themes.tab");
+	}
+	if(  !themes_ok  ) {
+		dbg->fatal( "simmain()", "No GUI themes found! Please re-install!" );
 	}
 	chdir( env_t::program_dir );
 

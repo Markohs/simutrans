@@ -15,7 +15,6 @@
 #include "utils/plainstring.h"
 
 #define MAX_MONTHS     12 // Max history
-#define MAX_NON_MONEY_TYPES 2 // number of non money types in line's financial statistic
 
 #define LINE_CAPACITY   0 // the amount of ware that could be transported, theoretically
 #define LINE_TRANSPORTED_GOODS 1 // the amount of ware that has been transported
@@ -120,6 +119,8 @@ public:
 	 */
 	uint32 count_convoys() const { return line_managed_convoys.get_count(); }
 
+	vector_tpl<convoihandle_t> const& get_convoys() const { return line_managed_convoys; }
+
 	/*
 	 * returns the state of the line
 	 * @author prissi
@@ -175,6 +176,7 @@ public:
 	sint64* get_finance_history() { return *financial_history; }
 
 	sint64 get_finance_history(int month, int cost_type) const { return financial_history[month][cost_type]; }
+	sint64 get_stat_converted(int month, int cost_type) const;
 
 	void book(sint64 amount, int cost_type) { financial_history[0][cost_type] += amount; }
 

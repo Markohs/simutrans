@@ -56,6 +56,11 @@ private:
 	 */
 	bool load_script(const char* filename);
 
+	/**
+	 * loads necessary compatibility scripts
+	 */
+	void load_compatibility_script();
+
 	/// is set, if an error occurred during loading of savegame
 	/// e.g. re-starting of scenario failed due to script error
 	bool rdwr_error;
@@ -304,6 +309,16 @@ public:
 	 * Server sends update of won/lost if necessary.
 	 */
 	void step();
+
+	/**
+	 * Called upon month change: at 0:00 of the first day of the new month.
+	 */
+	void new_month();
+
+	/**
+	 * Called upon new year: at 0:00 January 1st.
+	 */
+	void new_year();
 
 	/// @{
 	/// @name Interface to forbid tools in-game

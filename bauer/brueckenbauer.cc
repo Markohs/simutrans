@@ -157,13 +157,12 @@ const char *check_tile( const grund_t *gr, const spieler_t *sp, waytype_t wt, ri
 		return "Tile not empty.";
 	}
 
+	if(  wt != powerline_wt  &&  gr->get_leitung()  ) {
+		return "Tile not empty.";
+	}
+
 	// we can build a ramp when there is one (or with tram two) way in our direction and no stations/depot etc.
 	if(  weg_t *w = gr->get_weg_nr(0)  ) {
-
-		if(  gr->get_leitung()  ) {
-			// something in the way
-			return "Tile not empty.";
-		}
 
 		if(  !spieler_t::check_owner(w->get_besitzer(),sp)  ) {
 			// not our way
@@ -186,10 +185,11 @@ const char *check_tile( const grund_t *gr, const spieler_t *sp, waytype_t wt, ri
 				ribi = gr->get_weg_ribi_unmasked(wt);
 			}
 			// same waytype, same direction, no stop or depot or any other stuff */
-			if(  w2->get_waytype() == wt  &&  ribi_check( ribi, check_ribi )  ) {
+			if(  gr->get_weg(wt)  &&  ribi_t::doppelt(ribi) == ribi_t::doppelt( check_ribi )  ) {
 				// ok too
 				return NULL;
 			}
+			return "A bridge must start on a way!";
 		}
 
 		if(  w->get_waytype() != wt  ) {
@@ -200,13 +200,13 @@ const char *check_tile( const grund_t *gr, const spieler_t *sp, waytype_t wt, ri
 			return "A bridge must start on a way!";
 		}
 
-		// same waytype, same direction, no stop or depot or any other stuff */
-		if(  w->get_waytype() == wt  &&  ribi_check( ribi, check_ribi )  ) {
+		// same waytype, any direction, no stop or depot or any other stuff */
+		if(  w->get_waytype() == wt  ) {
 			// ok too
 			return NULL;
 		}
 
-		// one two non-matching ways where I cannot built a crossing
+		// one or two non-matching ways where I cannot built a crossing
 		return "A bridge must start on a way!";
 	}
 	else if(  wt == powerline_wt  ) {
@@ -215,6 +215,7 @@ const char *check_tile( const grund_t *gr, const spieler_t *sp, waytype_t wt, ri
 				// matching powerline
 				return NULL;
 			}
+			return "A bridge must start on a way!";
 		}
 	}
 	// somethign here which we cannot remove => fail too
@@ -278,6 +279,11 @@ koord3d brueckenbauer_t::finde_ende(spieler_t *sp, koord3d pos, const koord zv, 
 			break;
 		}
 
+		if(  gr->get_hoehe() == max_height-1  &&  besch->get_waytype() != powerline_wt  &&  gr->get_leitung()  ) {
+			error_msg = "Tile not empty.";
+			return koord3d::invalid;
+		}
+
 		// check for height
 		if(  besch->get_max_height()  &&  max_height-gr->get_hoehe() > besch->get_max_height()  ) {
 			error_msg = "bridge is too high for its type!";
@@ -323,8 +329,8 @@ koord3d brueckenbauer_t::finde_ende(spieler_t *sp, koord3d pos, const koord zv, 
 				/* now we have a flat tile below */
 				error_msg = check_tile( gr, sp, besch->get_waytype(), ribi_typ(zv) );
 
-				if(  hang_height <= max_height  &&  (  gr->has_two_ways()  ||  (  gr->get_weg_nr(0)  &&  gr->get_weg_nr(0)->get_waytype() != besch->get_waytype()  )  )  ) {
-					// no crossing here (since it will a slope ramp)
+				if(  hang_height < max_height  &&  (  gr->has_two_ways()  ||  (  gr->get_weg_nr(0)  &&  (gr->get_weg_nr(0)->get_waytype() != besch->get_waytype()  ||  gr->get_weg_ribi_unmasked(besch->get_waytype())!=ribi_typ(zv)  )  )  )  ) {
+					// no crossing or curve here (since it will a slope ramp)
 					error_msg = "A bridge must start on a way!";
 				}
 
@@ -359,7 +365,7 @@ koord3d brueckenbauer_t::finde_ende(spieler_t *sp, koord3d pos, const koord zv, 
 				if(  ribi_typ(end_slope) == ribi_typ(zv)  ) {
 					// slope matches
 					error_msg = check_tile( gr, sp, besch->get_waytype(), ribi_typ(zv) );
-					if(  !error_msg  ) {
+					if(  !error_msg  ||  !*error_msg  ) {
 						// success
 						return gr->get_pos();
 					}
@@ -466,7 +472,7 @@ const char *brueckenbauer_t::baue( spieler_t *sp, koord pos, const bruecke_besch
 	koord3d end = finde_ende(sp, gr->get_pos(), zv, besch, msg );
 
 	// found something?
-	if(msg!=NULL) {
+	if(  koord3d::invalid == end  ) {
 DBG_MESSAGE("brueckenbauer_t::baue()", "end not ok");
 		return msg;
 	}
@@ -498,23 +504,23 @@ DBG_MESSAGE("brueckenbauer_t::baue()", "end not ok");
 }
 
 
-void brueckenbauer_t::baue_bruecke(spieler_t *sp, koord3d pos, koord3d end, koord zv, const bruecke_besch_t *besch, const weg_besch_t *weg_besch)
+void brueckenbauer_t::baue_bruecke(spieler_t *sp, const koord3d start, const koord3d end, koord zv, const bruecke_besch_t *besch, const weg_besch_t *weg_besch)
 {
 	ribi_t::ribi ribi = ribi_typ(zv);
 
-	DBG_MESSAGE("brueckenbauer_t::baue()", "build from %s", pos.get_str() );
+	DBG_MESSAGE("brueckenbauer_t::baue()", "build from %s", start.get_str() );
 
-	const hang_t::typ slope = welt->lookup_kartenboden( pos.get_2d() )->get_grund_hang();
+	const hang_t::typ slope = welt->lookup_kartenboden( start.get_2d() )->get_grund_hang();
 
 	// get initial height of bridge from start tile, default to 1 unless double slope
 	const uint8 max_height = slope ?  hang_t::max_diff(slope) : (besch->has_double_ramp() ? 2 : 1);
 
-	baue_auffahrt( sp, pos, ribi, slope?0:hang_typ(zv)*max_height, besch );
+	baue_auffahrt( sp, start, ribi, slope?0:hang_typ(zv)*max_height, besch );
 	if(  besch->get_waytype() != powerline_wt  ) {
-		ribi = welt->lookup(pos)->get_weg_ribi_unmasked(besch->get_waytype());
+		ribi = welt->lookup(start)->get_weg_ribi_unmasked(besch->get_waytype());
 	}
 
-	pos += koord3d( zv.x, zv.y, max_height );
+	koord3d pos = start+koord3d( zv.x, zv.y, max_height );
 
 	while(  pos.get_2d() != end.get_2d()  ) {
 		brueckenboden_t *bruecke = new brueckenboden_t( pos, 0, 0 );
@@ -595,6 +601,42 @@ void brueckenbauer_t::baue_bruecke(spieler_t *sp, koord3d pos, koord3d end, koor
 				lt->laden_abschliessen();
 			}
 			lt->calc_neighbourhood();
+		}
+	}
+
+	// if start or end are single way, and next tile is not, try to connect
+	if(  besch->get_waytype() != powerline_wt  &&  sp  ) {
+		if(  grund_t *start_gr = welt->lookup(start)  ) {
+			ribi_t::ribi ribi = start_gr->get_weg_ribi_unmasked(besch->get_waytype());
+			if(  ribi_t::ist_einfach(ribi)  ) {
+				// only single tile under start => try to connect to next tile
+				koord3d next_to_start = koord3d( start.get_2d()-koord(ribi), start_gr->get_vmove( ribi_t::rueckwaerts(ribi) ) );
+				wegbauer_t bauigel(sp);
+				bauigel.set_keep_existing_ways(true);
+				bauigel.set_keep_city_roads(true);
+				bauigel.set_maximum(2);
+				bauigel.route_fuer( (wegbauer_t::bautyp_t)besch->get_waytype(), wegbauer_t::weg_search( besch->get_waytype(), besch->get_topspeed(), welt->get_timeline_year_month(), weg_t::type_flat ), NULL, NULL );
+				bauigel.calc_route( start, next_to_start );
+				if(  bauigel.get_count() > 1  ) {
+					bauigel.baue();
+				}
+			}
+		}
+		if(  grund_t *end_gr = welt->lookup(end)  ) {
+			ribi_t::ribi ribi = end_gr->get_weg_ribi_unmasked(besch->get_waytype());
+			if(  ribi_t::ist_einfach(ribi)  ) {
+				// only single tile under start => try to connect to next tile
+				koord3d next_to_end = koord3d( end.get_2d()-koord(ribi), end_gr->get_vmove( ribi_t::rueckwaerts(ribi) ) );
+				wegbauer_t bauigel(sp);
+				bauigel.set_keep_existing_ways(true);
+				bauigel.set_keep_city_roads(true);
+				bauigel.set_maximum(2);
+				bauigel.route_fuer( (wegbauer_t::bautyp_t)besch->get_waytype(), wegbauer_t::weg_search( besch->get_waytype(), besch->get_topspeed(), welt->get_timeline_year_month(), weg_t::type_flat ), NULL, NULL );
+				bauigel.calc_route( end, next_to_end );
+				if(  bauigel.get_count() > 1  ) {
+					bauigel.baue();
+				}
+			}
 		}
 	}
 }
@@ -788,11 +830,15 @@ const char *brueckenbauer_t::remove(spieler_t *sp, koord3d pos, waytype_t wegtyp
 			gr->remove_everything_from_way(sp,wegtyp,bridge_ribi);	// removes stop and signals correctly
 
 			// corrects the ways
-			weg=gr->get_weg(wegtyp);
-			if(weg) {
-				// may fail, if this was the last tile
-				weg->set_besch(weg->get_besch());
+			weg = gr->get_weg(wegtyp);
+			if(  weg  ) {
+				// needs checks, since this fails if it was the last tile
+				weg->set_besch( weg->get_besch() );
 				weg->set_ribi( ribi );
+				if(  hang_t::max_diff(gr->get_grund_hang())>=2  &&  !weg->get_besch()->has_double_slopes()  ) {
+					// remove the way totally, if is is on a double slope
+					gr->weg_entfernen( weg->get_waytype(), ribi_t::alle );
+				}
 			}
 		}
 

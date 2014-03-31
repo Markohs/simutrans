@@ -121,6 +121,7 @@ void convoi_t::init(spieler_t *sp)
 	speedbonus_kmh = SPEED_UNLIMITED; // speed_to_kmh() not needed
 
 	fpl = NULL;
+	fpl_target = koord3d::invalid;
 	line = linehandle_t();
 
 	anz_vehikel = 0;
@@ -232,6 +233,19 @@ DBG_MESSAGE("convoi_t::~convoi_t()", "destroying %d, %p", self.get_id(), this);
 }
 
 
+// waypoint: no stop, resp. for airplanes in air (i.e. no air strip below)
+bool convoi_t::is_waypoint( koord3d ziel ) const
+{
+	if (fahr[0]->get_waytype() == air_wt) {
+		grund_t *gr = welt->lookup_kartenboden(ziel.get_2d());
+		return  gr == NULL  ||  gr->get_weg(air_wt) == NULL;
+	}
+	else {
+		return !haltestelle_t::get_halt(ziel,get_besitzer()).is_bound();
+	}
+}
+
+
 /**
  * unreserves the whole remaining route
  */
@@ -332,6 +346,13 @@ void convoi_t::laden_abschliessen()
 			}
 		}
 		return;
+	}
+	else {
+		// restore next schedule target for non-stop waypoint handling
+		const koord3d ziel = fpl->get_current_eintrag().pos;
+		if(  anz_vehikel>0  &&  is_waypoint(ziel)  ) {
+			fpl_target = ziel;
+		}
 	}
 
 	bool realing_position = false;
@@ -918,8 +939,96 @@ bool convoi_t::drive_to()
 			wait_lock = 25000;
 		}
 		else {
-			vorfahren();
-			return true;
+			bool route_ok = true;
+			const uint8 aktuell = fpl->get_aktuell();
+			if(  fahr[0]->get_waytype() != water_wt  ) {
+				aircraft_t *const plane = dynamic_cast<aircraft_t *>(fahr[0]);
+				uint32 takeoff, search, landing;
+				aircraft_t::flight_state plane_state;
+				if(  plane  ) {
+					// due to the complex state system of aircrafts, we have to save index and state
+					plane->get_event_index( plane_state, takeoff, search, landing );
+				}
+
+				// set next schedule target position if next is a waypoint
+				if(  is_waypoint(ziel)  ) {
+					fpl_target = ziel;
+				}
+
+				// continue route search until the destination is a station
+				while(  is_waypoint(ziel)  ) {
+					start = ziel;
+					fpl->advance();
+					ziel = fpl->get_current_eintrag().pos;
+
+					if(  fpl->get_aktuell() == aktuell  ) {
+						// looped around without finding a halt => entire schedule is waypoints.
+						break;
+					}
+
+					route_t next_segment;
+					if(  !fahr[0]->calc_route( start, ziel, speed_to_kmh(min_top_speed), &next_segment )  ) {
+						// do we still have a valid route to proceed => then go until there
+						if(  route.get_count()>1  ) {
+							break;
+						}
+						// we are stuck on our first routing attempt => give up
+						if(  state != NO_ROUTE  ) {
+							state = NO_ROUTE;
+							get_besitzer()->bescheid_vehikel_problem( self, ziel );
+						}
+						// wait 25s before next attempt
+						wait_lock = 25000;
+						route_ok = false;
+						break;
+					}
+					else {
+						bool looped = false;
+						if(  fahr[0]->get_waytype() != air_wt  ) {
+							 // check if the route circles back on itself (only check the first tile, should be enough)
+							looped = route.is_contained(next_segment.position_bei(1));
+	#if 0
+							// this will forbid an eight figure, which might be clever to avoid a problem of reserving one own track
+							for(  unsigned i = 1;  i<next_segment.get_count();  i++  ) {
+								if(  route.is_contained(next_segment.position_bei(i))  ) {
+									looped = true;
+									break;
+								}
+							}
+	#endif
+						}
+
+						if(  looped  ) {
+							// proceed upto the waypoint before the loop. Will pause there for a new route search.
+							fpl_target = koord3d::invalid;
+							break;
+						}
+						else {
+							uint32 count_offset = route.get_count()-1;
+							route.append( &next_segment);
+							if(  plane  ) {
+								// maybe we need to restore index
+								uint32 dummy2;
+								aircraft_t::flight_state dummy1;
+								plane->get_event_index( dummy1, dummy2, search, landing );
+								search += count_offset;
+								landing += count_offset;
+							}
+						}
+					}
+				}
+
+				if(  plane  ) {
+					// due to the complex state system of aircrafts, we have to restore index and state
+					plane->set_event_index( plane_state, takeoff, search, landing );
+				}
+			}
+
+			fpl->set_aktuell(aktuell);
+			if(  route_ok  ) {
+				vorfahren();
+				return true;
+			}
 		}
 	}
 	return false;
@@ -969,6 +1078,7 @@ void convoi_t::step()
 			if(fpl!=NULL  &&  fpl->ist_abgeschlossen()) {
 
 				set_schedule(fpl);
+				fpl_target = koord3d::invalid;
 
 				if(  fpl->empty()  ) {
 					// no entry => no route ...
@@ -1041,7 +1151,8 @@ void convoi_t::step()
 			// stuck vehicles
 			if (fpl->empty()) {
 				// no entries => no route ...
-			} else {
+			}
+			else {
 				// Hajo: now calculate a new route
 				drive_to();
 			}
@@ -1804,7 +1915,7 @@ void convoi_t::vorfahren()
 					cr->release_crossing(v);
 				}
 				// eventually unreserve this
-				if (schiene_t* const sch0 = obj_cast<schiene_t>(gr->get_weg(fahr[i]->get_waytype()))) {
+				if(  schiene_t* const sch0 = obj_cast<schiene_t>(gr->get_weg(fahr[i]->get_waytype()))  ) {
 					sch0->unreserve(v);
 				}
 			}
@@ -2643,7 +2754,7 @@ void convoi_t::hat_gehalten(halthandle_t halt)
 	// only load vehicles in station
 	// don't load when vehicle is being withdrawn
 	bool changed_loading_level = false;
-	uint32 time = 0;	// time for loading/unloading
+	uint32 time = WTT_LOADING;	// min time for loading/unloading
 	for(unsigned i=0; i<anz_vehikel; i++) {
 		vehikel_t* v = fahr[i];
 
@@ -2667,7 +2778,7 @@ void convoi_t::hat_gehalten(halthandle_t halt)
 			amount += v->load_freight(halt);
 		}
 		if(  amount  ) {
-			time += (amount*v->get_besch()->get_loading_time())/v->get_fracht_max();
+			time = max( time, (amount*v->get_besch()->get_loading_time()) / max(v->get_fracht_max(), 1) );
 			v->calc_bild();
 			changed_loading_level = true;
 		}
@@ -2724,7 +2835,7 @@ void convoi_t::hat_gehalten(halthandle_t halt)
 	INT_CHECK( "convoi_t::hat_gehalten" );
 
 	// at least wait the minimum time for loading
-	wait_lock = max( WTT_LOADING, time );
+	wait_lock = time;
 }
 
 
@@ -3527,6 +3638,7 @@ sint64 convoi_t::get_stat_converted(int month, int cost_type) const
 		case CONVOI_REVENUE:
 		case CONVOI_OPERATIONS:
 		case CONVOI_PROFIT:
+		case CONVOI_WAYTOLL:
 			value = convert_money(value);
 			break;
 		default: ;

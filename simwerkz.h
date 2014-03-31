@@ -52,7 +52,7 @@ public:
 // remove uppermost object from tile
 class wkz_remover_t : public werkzeug_t {
 private:
-	static bool wkz_remover_intern(spieler_t *sp, koord3d pos, const char *&msg);
+	bool wkz_remover_intern(spieler_t *sp, koord3d pos, const char *&msg);
 public:
 	wkz_remover_t() : werkzeug_t(WKZ_REMOVER | GENERAL_TOOL) {}
 	char const* get_tooltip(spieler_t const*) const OVERRIDE { return translator::translate("Abriss"); }
@@ -298,7 +298,7 @@ public:
 	bool is_init_network_save() const OVERRIDE { return true; }
 	waytype_t get_waytype() const OVERRIDE;
 	bool remove_preview_necessary() const OVERRIDE { return !is_first_click(); }
-	void rdwr_custom_data(uint8 player_nr, memory_rw_t*) OVERRIDE;
+	void rdwr_custom_data(memory_rw_t*) OVERRIDE;
 };
 
 class wkz_tunnelbau_t : public two_click_werkzeug_t {
@@ -368,7 +368,7 @@ private:
 	static char toolstring[256];
 	const char *wkz_station_building_aux(spieler_t *, bool, koord3d, const haus_besch_t *, sint8 rotation );
 	const char *wkz_station_dock_aux(spieler_t *, koord3d, const haus_besch_t * );
-	const char *wkz_station_aux(spieler_t *, koord3d, const haus_besch_t *, waytype_t, sint64 cost, const char *halt_suffix );
+	const char *wkz_station_aux(spieler_t *, koord3d, const haus_besch_t *, waytype_t, const char *halt_suffix );
 	const haus_besch_t *get_besch( sint8 &rotation ) const;
 
 public:
@@ -694,8 +694,9 @@ public:
 		int faktor = atoi(default_param);
 		return faktor>0 ? translator::translate("Accelerate time") : translator::translate("Deccelerate time");
 	}
-	bool init( spieler_t * ) {
-		if(  !env_t::networkmode  ) {
+	bool init( spieler_t *sp ) {
+		if(  !env_t::networkmode  ||  sp->get_player_nr()==1  ) {
+			// in networkmode only for public player
 			welt->change_time_multiplier( atoi(default_param) );
 		}
 		return false;

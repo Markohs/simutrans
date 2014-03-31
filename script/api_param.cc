@@ -21,6 +21,11 @@ namespace script_api {
 		return 0;
 	}
 
+	void_t param<void_t>::get(HSQUIRRELVM, SQInteger)
+	{
+		return void_t();
+	}
+
 // integer arguments
 	uint8 param<uint8>::get(HSQUIRRELVM vm, SQInteger index)
 	{
@@ -302,8 +307,6 @@ namespace script_api {
 		// obtain index into wareproduction_t arrays
 		SQInteger i = -1;
 		if (SQ_SUCCEEDED(get_slot(vm, "index", i, index))) {
-			i = param<sint16>::get(vm, -1);
-			sq_pop(vm, 1);
 			if (i>=0) {
 				if ( (uint32)i<fab->get_eingang().get_count()) {
 					return &fab->get_eingang()[i];
@@ -422,6 +425,12 @@ namespace script_api {
 	}
 
 
+	SQInteger param<schedule_t*>::push(HSQUIRRELVM vm, schedule_t* const& v)
+	{
+		return param<const schedule_t*>::push(vm, v);
+	}
+
+
 	SQInteger param<const schedule_t*>::push(HSQUIRRELVM vm, const schedule_t* const& v)
 	{
 		if (v) {
@@ -437,6 +446,27 @@ namespace script_api {
 	{
 		return &welt->get_settings();
 	}
+
+
+	linehandle_t param<linehandle_t>::get(HSQUIRRELVM vm, SQInteger index)
+	{
+		uint16 id = 0;
+		get_slot(vm, "id", id, index);
+		linehandle_t line;
+		line.set_id(id);
+		if (!line.is_bound()) {
+			sq_raise_error(vm, "Invalid line id %d", id);
+		}
+		return line;
+	}
+
+
+	simline_t* param<simline_t*>::get(HSQUIRRELVM vm, SQInteger index)
+	{
+		linehandle_t line = param<linehandle_t>::get(vm, index);
+		return line.is_bound() ? line.get_rep() : NULL;
+	}
+
 
 	stadt_t* param<stadt_t*>::get(HSQUIRRELVM vm, SQInteger index)
 	{

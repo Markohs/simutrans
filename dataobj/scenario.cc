@@ -93,7 +93,9 @@ const char* scenario_t::init( const char *scenario_base, const char *scenario_na
 		dbg->warning("scenario_t::init", "error [%s] calling get_map_file", err);
 		return "No scenario map specified";
 	}
-	else {
+
+	// if savegame-string == "<attach>" then do not load a savegame, just attach to running game.
+	if ( strcmp(mapfile, "<attach>") ) {
 		// savegame location
 		buf.clear();
 		buf.printf("%s%s/%s", scenario_base, scenario_name_, mapfile.c_str());
@@ -101,12 +103,13 @@ const char* scenario_t::init( const char *scenario_base, const char *scenario_na
 			dbg->warning("scenario_t::init", "error loading savegame %s", err, (const char*)buf);
 			return "Could not load scenario map!";
 		}
+		// set savegame name
+		buf.clear();
+		buf.printf("%s.sve", scenario_name.c_str());
+		welt->get_settings().set_filename( strdup(buf) );
 	}
 
-	// set savegame name
-	buf.clear();
-	buf.printf("%s.sve", scenario_name.c_str());
-	welt->get_settings().set_filename( strdup(buf) );
+	load_compatibility_script();
 
 	// load translations
 	translator::load_files_from_folder( scenario_path.c_str(), "scenario" );
@@ -134,7 +137,7 @@ const char* scenario_t::init( const char *scenario_base, const char *scenario_na
 
 bool scenario_t::load_script(const char* filename)
 {
-	script = new script_vm_t();
+	script = new script_vm_t(scenario_path.c_str());
 	// load global stuff
 	// constants must be known compile time
 	export_global_constants(script->get_vm());
@@ -165,6 +168,32 @@ bool scenario_t::load_script(const char* filename)
 		return false;
 	}
 	return true;
+}
+
+
+void scenario_t::load_compatibility_script()
+{
+	// check api version
+	plainstring api_version;
+	if (const char* err = script->call_function("get_api_version", api_version)) {
+		dbg->warning("scenario_t::init", "error [%s] calling get_api_version", err);
+		api_version = "112.3";
+	}
+	if (api_version != "*") {
+		// load scenario compatibility script
+		cbuffer_t buf;
+		buf.printf("%sscript/scenario_compat.nut", env_t::program_dir );
+		if (const char* err = script->call_script((const char*)buf) ) {
+			dbg->warning("scenario_t::init", "error [%s] calling scenario_compat.nut", err);
+		}
+		else {
+			plainstring dummy;
+			// call compatibility function
+			if ((err = script->call_function("compat", dummy, api_version) )) {
+				dbg->warning("scenario_t::init", "error [%s] calling compat", err);
+			}
+		}
+	}
 }
 
 
@@ -619,6 +648,21 @@ void scenario_t::step()
 }
 
 
+void scenario_t::new_month()
+{
+	if (script) {
+		script->call_function("new_month");
+	}
+}
+
+void scenario_t::new_year()
+{
+	if (script) {
+		script->call_function("new_year");
+	}
+}
+
+
 void scenario_t::update_won_lost(uint16 new_won, uint16 new_lost)
 {
 	// we are the champions
@@ -766,6 +810,7 @@ void scenario_t::rdwr(loadsave_t *file)
 				}
 
 				if (!rdwr_error) {
+					load_compatibility_script();
 					// restore persistent data
 					const char* err = script->eval_string(str);
 					if (err) {

@@ -4,6 +4,17 @@
  *
  * @section api-trunk Current trunk
  *
+ * - Added line_x, line_list_x
+ * - Deprecated get_convoy_list()
+ * - Added world::get_convoy_list, halt_x::get_convoy_list
+ * - Added @ref scenario.api to manage backward compatibility of scripts with the changing api
+ * - Added ::include
+ * - Changed return type of world::get_time to time_ticks_x
+ * - Added building_x::is_same_building.
+ * - Added attraction_list_x, world::get_attraction_list
+ * - Added ::new_month, ::new_year
+ * - Added halt_list_x
+ * - Added possibility to attach scenario to an already running game, set map.file to "<attach>".
  * - Added building_desc_x::get_type, convoy_x::get_distance_traveled_total, obj_desc_time_x::is_available
  * - Added obj_desc_time_x, obj_desc_transport_x, building_desc_x, tree_desc_x, way_desc_x
  * - Added time_x

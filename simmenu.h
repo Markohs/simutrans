@@ -244,7 +244,7 @@ public:
 	void set_default_param(const char* str) { default_param = str; }
 
 	// transfer additional information in networkgames
-	virtual void rdwr_custom_data(uint8 /* player_nr */, memory_rw_t*) { }
+	virtual void rdwr_custom_data(memory_rw_t*) { }
 
 	// this will draw the tool with some indication, if active
 	virtual bool is_selected() const;
@@ -331,7 +331,7 @@ public:
 		MEMZERO(start_marker);
 	}
 
-	void rdwr_custom_data(uint8 player_nr, memory_rw_t*) OVERRIDE;
+	void rdwr_custom_data(memory_rw_t*) OVERRIDE;
 	bool init(spieler_t*) OVERRIDE;
 	bool exit(spieler_t* const sp) OVERRIDE { return init(sp); }
 
@@ -349,6 +349,7 @@ public:
 	bool is_first_click() const;
 	void cleanup(bool delete_start_marker );
 
+	const koord3d& get_start_pos() const { return start; }
 private:
 
 	/*
@@ -387,20 +388,16 @@ protected:
 
 /* toolbar are a new overclass */
 class toolbar_t : public werkzeug_t {
-public:
-	// size of icons
-	scr_size iconsize;
 private:
 	const char *helpfile;
 	werkzeug_waehler_t *wzw;
 	slist_tpl<werkzeug_t *>tools;
 public:
-	toolbar_t(uint16 const id, char const* const t, char const* const h, scr_size const size) : werkzeug_t(id)
+	toolbar_t(uint16 const id, char const* const t, char const* const h) : werkzeug_t(id)
 	{
 		default_param = t;
 		helpfile = h;
 		wzw = NULL;
-		iconsize = size;
 	}
 	char const* get_tooltip(spieler_t const*) const OVERRIDE { return translator::translate(default_param); }
 	werkzeug_waehler_t *get_werkzeug_waehler() const { return wzw; }
