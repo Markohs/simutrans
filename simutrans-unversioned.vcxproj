@@ -148,11 +148,6 @@
     <ClCompile Include="gui\gui_theme.cc" />
     <ClCompile Include="gui\simwin.cc" />
     <ClCompile Include="gui\themeselector.cc" />
-    <ClCompile Include="opengl\dynamic_geometry.cc" />
-    <ClCompile Include="opengl\geometry.cc" />
-    <ClCompile Include="opengl\shaders.cc" />
-    <ClCompile Include="opengl\static_geometry.cc" />
-    <ClCompile Include="opengl\texture_atlas.cc" />
     <ClCompile Include="player\ai.cc" />
     <ClCompile Include="player\ai_goods.cc" />
     <ClCompile Include="gui\ai_option_t.cc" />
@@ -190,7 +185,7 @@
     <ClCompile Include="besch\reader\building_reader.cc" />
     <ClCompile Include="siminteraction.cc" />
     <ClCompile Include="simloadingscreen.cc" />
-    <ClCompile Include="simsys_opengl.cc" />
+    <ClCompile Include="simsys_s.cc" />
     <ClCompile Include="simsys_w32_png.cc" />
     <ClCompile Include="utils\cbuffer_t.cc" />
     <ClCompile Include="network\checksum.cc" />
@@ -457,12 +452,7 @@
     <ClInclude Include="gui\gui_theme.h" />
     <ClInclude Include="gui\simwin.h" />
     <ClInclude Include="gui\themeselector.h" />
-    <ClInclude Include="opengl\dynamic_geometry.h" />
-    <ClInclude Include="opengl\geometry.h" />
     <ClInclude Include="opengl\matrix.h" />
-    <ClInclude Include="opengl\shaders.h" />
-    <ClInclude Include="opengl\static_geometry.h" />
-    <ClInclude Include="opengl\texture_atlas.h" />
     <ClInclude Include="player\ai.h" />
     <ClInclude Include="player\ai_goods.h" />
     <ClInclude Include="gui\ai_option_t.h" />
