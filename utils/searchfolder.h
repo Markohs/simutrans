@@ -50,6 +50,10 @@ public:
 	 * Gets the last entry iterator.
 	 */
 	const_iterator end()   const { return files.end();   }
+	/**
+	 *
+	 */
+	uint32 get_num_entries() const { return files.get_count(); }
 
 private:
 	/**

@@ -77,6 +77,9 @@
 #include "vehicle/simvehikel.h"
 #include "vehicle/simverkehr.h"
 
+#include "framework/root.h"
+#include "framework/tasks/game_loop_task.h"
+
 using std::string;
 
 /* diagnostic routine:
@@ -367,6 +370,20 @@ static const char *gimme_arg(int argc, char *argv[], const char *arg, int off)
 	return NULL;
 }
 
+
+int simu_main_new(int argc, char** argv)
+{
+	root_t *root;
+	game_loop_task_t *loop;
+
+	root = new root_t(argc,argv);
+
+	loop = new game_loop_task_t();
+
+	root->start();
+
+	return 0;
+}
 
 int simu_main(int argc, char** argv)
 {

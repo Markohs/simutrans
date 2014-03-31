@@ -78,7 +78,7 @@
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
       <IgnoreSpecificDefaultLibraries>libcmt.lib;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <SubSystem>Windows</SubSystem>
+      <SubSystem>Console</SubSystem>
       <RandomizedBaseAddress>false</RandomizedBaseAddress>
       <DataExecutionPrevention>
       </DataExecutionPrevention>
@@ -145,10 +145,16 @@
     <ClCompile Include="framework\guimanager.cc" />
     <ClCompile Include="framework\logmanager.cc" />
     <ClCompile Include="framework\resourcemanager.cc" />
+    <ClCompile Include="framework\resourceops\objreadop.cc" />
+    <ClCompile Include="framework\resourceops\searchfolderop.cc" />
     <ClCompile Include="framework\root.cc" />
     <ClCompile Include="framework\systemmanager.cc" />
     <ClCompile Include="framework\task.cc" />
     <ClCompile Include="framework\taskmanager.cc" />
+    <ClCompile Include="framework\tasks\game_loop_task.cc" />
+    <ClCompile Include="framework\tasks\pak_loader_task.cc" />
+    <ClCompile Include="framework\tasks\world_step_task.cc" />
+    <ClCompile Include="framework\tasks\world_sync_task.cc" />
     <ClCompile Include="framework\task_long_steppable.cc" />
     <ClCompile Include="framework\task_steppable.cc" />
     <ClCompile Include="gui\components\gui_container.cc" />
@@ -166,6 +172,8 @@
     <ClCompile Include="player\finance.cc" />
     <ClCompile Include="script\api\api_city.cc" />
     <ClCompile Include="script\api\api_gui.cc" />
+    <ClCompile Include="script\api\api_include.cc" />
+    <ClCompile Include="script\api\api_line.cc" />
     <ClCompile Include="script\api\api_map_objects.cc" />
     <ClCompile Include="script\api\api_obj_desc.cc" />
     <ClCompile Include="script\api\api_obj_desc_base.cc" />
@@ -463,11 +471,17 @@
     <ClInclude Include="framework\logmanager.h" />
     <ClInclude Include="framework\resourcemanager.h" />
     <ClInclude Include="framework\resourceop.h" />
+    <ClInclude Include="framework\resourceops\objreadop.h" />
+    <ClInclude Include="framework\resourceops\searchfolderop.h" />
     <ClInclude Include="framework\root.h" />
     <ClInclude Include="framework\singleton.h" />
     <ClInclude Include="framework\systemmanager.h" />
     <ClInclude Include="framework\task.h" />
     <ClInclude Include="framework\taskmanager.h" />
+    <ClInclude Include="framework\tasks\game_loop_task.h" />
+    <ClInclude Include="framework\tasks\pak_loader_task.h" />
+    <ClInclude Include="framework\tasks\world_step_task.h" />
+    <ClInclude Include="framework\tasks\world_sync_task.h" />
     <ClInclude Include="framework\task_long_steppable.h" />
     <ClInclude Include="framework\task_steppable.h" />
     <ClInclude Include="gui\components\action_listener.h" />
