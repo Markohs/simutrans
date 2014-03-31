@@ -52,7 +52,7 @@ void guimanager_t::add_simple_frame( gui_frame_t *item )
 {
 	gui_root = item;
 
-	koord pos( (display_get_width()-gui_root->get_fenstergroesse().x)/2 , (display_get_height()-gui_root->get_fenstergroesse().y)/2 );
+	koord pos( (display_get_width()-gui_root->get_windowsize().w )/2 , (display_get_height()-gui_root->get_windowsize().h)/2 );
 
 	create_win( pos.x , pos.y , gui_root, w_info, magic_none );
 }
