@@ -77,35 +77,10 @@
 #include "vehicle/simvehikel.h"
 #include "vehicle/simverkehr.h"
 
-#include "framework/tasks/pak_loader_task.h"
-#include "framework/tasks/world_step_task.h"
-#include "framework/tasks/world_sync_task.h"
-
-#include "framework/guimanager.h"
-#include "simworldeventmanager.h"
-
+#include "framework/root.h"
+#include "framework/tasks/game_loop_task.h"
 
 using std::string;
-
-/**
- * This function will be set in the main function as the handler the runtime environment will
- * call in the case it lacks memory for new()
- */
-static void sim_new_handler()
-{
-	dbg->fatal("sim_new_handler()", "OUT OF MEMORY");
-}
-
-static const char *gimme_arg(int argc, char *argv[], const char *arg, int off)
-{
-	for(  int i = 1;  i < argc;  i++  ) {
-		if(strcmp(argv[i], arg) == 0  &&  i < argc - off  ) {
-			return argv[i + off];
-		}
-	}
-	return NULL;
-}
-
 
 /* diagnostic routine:
  * show the size of several internal structures
@@ -226,37 +201,205 @@ static void show_times(karte_t *welt, karte_ansicht_t *view)
 }
 
 
-void game_loop_t::framestarted() {
-/*	dbg->debug("game_loop_t","STARTED!");
-	printf("game_loop_t: Started!\n");
-	*/
-	switch(current_state) {
-	case GLS_INIT:
-		init();
-		break;
-	case GLS_WAITFORPAK:
-		waitforpak();
-		break;
-	case GLS_PAKSELECTED:
-		pakselected();
-		break;
-	case GLS_WAITFORPAKLOADED:
-		waitforpakloaded();
-		break;
-	case GLS_FINAL:
-		static bool first_time = true;
-		if(first_time) {
-			printf("*****************FINAL, END OF LOOP*****************\n");
-			first_time=false;
-		}
-		state_final();
+
+void modal_dialogue( gui_frame_t *gui, ptrdiff_t magic, karte_t *welt, bool (*quit)() )
+{
+	if(  display_get_width()==0  ) {
+		dbg->error( "modal_dialogue()", "called without a display driver => nothing will be shown!" );
+		env_t::quit_simutrans = true;
+		// cannot handle this!
+		return;
 	}
 
+	event_t ev;
+	create_win( (display_get_width()-gui->get_windowsize().w)/2, (display_get_height()-gui->get_windowsize().h)/2, gui, w_info, magic );
+
+	if(  welt  ) {
+		welt->set_pause( false );
+		welt->reset_interaction();
+		welt->reset_timer();
+
+		long ms_pause = max( 25, 1000/env_t::fps );
+		uint32 last_step = dr_time()+ms_pause;
+		uint step_count = 5;
+		while(  win_is_open(gui)  &&  !env_t::quit_simutrans  &&  !quit()  ) {
+			do {
+				DBG_DEBUG4("zeige_banner", "calling win_poll_event");
+				win_poll_event(&ev);
+				// no toolbar events
+				if(  ev.my < env_t::iconsize.h  ) {
+					ev.my = env_t::iconsize.h;
+				}
+				if(  ev.cy < env_t::iconsize.h  ) {
+					ev.cy = env_t::iconsize.h;
+				}
+				if(  ev.ev_class == EVENT_KEYBOARD  &&  ev.ev_code == SIM_KEY_F1  ) {
+					if(  gui_frame_t *win = win_get_top()  ) {
+						if(  const char *helpfile = win->get_hilfe_datei()  ) {
+							help_frame_t::open_help_on( helpfile );
+							continue;
+						}
+					}
+				}
+				DBG_DEBUG4("zeige_banner", "calling check_pos_win");
+				check_pos_win(&ev);
+				if(  ev.ev_class == EVENT_SYSTEM  &&  ev.ev_code == SYSTEM_QUIT  ) {
+					env_t::quit_simutrans = true;
+					break;
+				}
+				dr_sleep(5);
+			} while(  dr_time()<last_step  );
+			DBG_DEBUG4("zeige_banner", "calling welt->sync_step");
+			welt->sync_step( ms_pause, true, true );
+			DBG_DEBUG4("zeige_banner", "calling welt->step");
+			if(  step_count--==0  ) {
+				welt->step();
+				step_count = 5;
+			}
+			last_step += ms_pause;
+		}
+	}
+	else {
+		display_show_pointer(true);
+		show_pointer(1);
+		set_pointer(0);
+		display_fillbox_wh( 0, 0, display_get_width(), display_get_height(), COL_BLACK, true );
+		while(  win_is_open(gui)  &&  !env_t::quit_simutrans  &&  !quit()  ) {
+			// do not move, do not close it!
+			dr_sleep(50);
+			dr_prepare_flush();
+			gui->draw(win_get_pos(gui), gui->get_windowsize());
+			dr_flush();
+
+			display_poll_event(&ev);
+			if(ev.ev_class==EVENT_SYSTEM) {
+				if (ev.ev_code==SYSTEM_RESIZE) {
+					// main window resized
+					simgraph_resize( ev.mx, ev.my );
+					dr_prepare_flush();
+					display_fillbox_wh( 0, 0, ev.mx, ev.my, COL_BLACK, true );
+					dr_flush();
+				}
+				else if (ev.ev_code == SYSTEM_QUIT) {
+					env_t::quit_simutrans = true;
+					break;
+				}
+			}
+			else {
+				// other events
+				check_pos_win(&ev);
+			}
+		}
+		set_pointer(1);
+		dr_prepare_flush();
+		display_fillbox_wh( 0, 0, display_get_width(), display_get_height(), COL_BLACK, true );
+		dr_flush();
+	}
+
+	// just trigger not another following window => wait for button release
+	if (IS_LEFTCLICK(&ev)) {
+		do {
+			display_get_event(&ev);
+		} while (!IS_LEFTRELEASE(&ev));
+	}
 }
 
 
-bool game_loop_t::init() {
-	quit_month = 0x7FFFFFFFu;
+// some routines for the modal display
+static bool never_quit() { return false; }
+static bool empty_objfilename() { return !env_t::objfilename.empty(); }
+static bool no_language() { return translator::get_language()!=-1; }
+
+
+
+/**
+ * Show pak selector
+ */
+static void ask_objfilename()
+{
+	pakselector_t* sel = new pakselector_t();
+	sel->fill_list();
+	if(sel->has_pak()) {
+		destroy_all_win(true);	// since eventually the successful load message is still there ....
+		modal_dialogue( sel, magic_none, NULL, empty_objfilename );
+	}
+	else {
+		delete sel;
+	}
+}
+
+
+
+/**
+ * Show language selector
+ */
+static void ask_language()
+{
+	if(  display_get_width()==0  ) {
+		// only console available ... => choose english for the moment
+		dbg->warning( "ask_language", "No language selected, will use english!" );
+		translator::set_language( "en" );
+	}
+	else {
+		sprachengui_t* sel = new sprachengui_t();
+		destroy_all_win(true);	// since eventually the successful load message is still there ....
+		modal_dialogue( sel, magic_none, NULL, no_language );
+		destroy_win( sel );
+	}
+}
+
+
+
+/**
+ * This function will be set in the main function as the handler the runtime enviroment will
+ * call in the case it lacks memory for new()
+ */
+static void sim_new_handler()
+{
+	dbg->fatal("sim_new_handler()", "OUT OF MEMORY");
+}
+
+
+static const char *gimme_arg(int argc, char *argv[], const char *arg, int off)
+{
+	for(  int i = 1;  i < argc;  i++  ) {
+		if(strcmp(argv[i], arg) == 0  &&  i < argc - off  ) {
+			return argv[i + off];
+		}
+	}
+	return NULL;
+}
+
+
+int simu_main_new(int argc, char** argv)
+{
+	root_t *root;
+	game_loop_task_t *loop;
+
+	root = new root_t(argc,argv);
+
+	loop = new game_loop_task_t();
+
+	root->start();
+
+	return 0;
+}
+
+int simu_main(int argc, char** argv)
+{
+	static const sint16 resolutions[][2] = {
+		{  640,  480 },
+		{  800,  600 },
+		{ 1024,  768 },
+		{ 1280, 1024 },
+		{  704,  560 } // try to force window mode with allegro
+	};
+
+	sint16 disp_width = 0;
+	sint16 disp_height = 0;
+	sint16 fullscreen = false;
+
+	uint32 quit_month = 0x7FFFFFFFu;
 
 	std::set_new_handler(sim_new_handler);
 
@@ -264,80 +407,72 @@ bool game_loop_t::init() {
 
 	// you really want help with this?
 	if (gimme_arg(argc, argv, "-h",     0) ||
-		gimme_arg(argc, argv, "-?",     0) ||
-		gimme_arg(argc, argv, "-help",  0) ||
-		gimme_arg(argc, argv, "--help", 0)) {
-			printf(
-				"\n"
-				"---------------------------------------\n"
-				"  Simutrans " VERSION_NUMBER "\n"
-				"  released " VERSION_DATE "\n"
-				"  developed\n"
-				"  by the Simutrans team.\n"
-				"\n"
-				"  Send feedback and questions to:\n"
-				"  <markus@pristovsek.de>\n"
-				"\n"
-				"  Based on Simutrans 0.84.21.2\n"
-				"  by Hansjörg Malthaner et. al.\n"
-				"---------------------------------------\n"
-				"command line parameters available: \n"
-				" -addons             loads also addons (with -objects)\n"
-				" -async              asynchronous images, only for SDL\n"
-				" -use_hw             hardware double buffering, only for SDL\n"
-				" -debug NUM          enables debugging (1..5)\n"
-				" -freeplay           play with endless money\n"
-				" -fullscreen         starts simutrans in fullscreen mode\n"
-				" -fps COUNT          framerate (from 5 to 100)\n"
-				" -h | -help | --help displays this help\n"
-				" -lang CODE          starts with specified language\n"
-				" -load FILE[.sve]    loads game in file 'save/FILE.sve'\n"
-				" -log                enables logging to file 'simu.log'\n"
+			gimme_arg(argc, argv, "-?",     0) ||
+			gimme_arg(argc, argv, "-help",  0) ||
+			gimme_arg(argc, argv, "--help", 0)) {
+		printf(
+			"\n"
+			"---------------------------------------\n"
+			"  Simutrans " VERSION_NUMBER "\n"
+			"  released " VERSION_DATE "\n"
+			"  developed\n"
+			"  by the Simutrans team.\n"
+			"\n"
+			"  Send feedback and questions to:\n"
+			"  <markus@pristovsek.de>\n"
+			"\n"
+			"  Based on Simutrans 0.84.21.2\n"
+			"  by Hansjörg Malthaner et. al.\n"
+			"---------------------------------------\n"
+			"command line parameters available: \n"
+			" -addons             loads also addons (with -objects)\n"
+			" -async              asynchronous images, only for SDL\n"
+			" -use_hw             hardware double buffering, only for SDL\n"
+			" -debug NUM          enables debugging (1..5)\n"
+			" -freeplay           play with endless money\n"
+			" -fullscreen         starts simutrans in fullscreen mode\n"
+			" -fps COUNT          framerate (from 5 to 100)\n"
+			" -h | -help | --help displays this help\n"
+			" -lang CODE          starts with specified language\n"
+			" -load FILE[.sve]    loads game in file 'save/FILE.sve'\n"
+			" -log                enables logging to file 'simu.log'\n"
 #ifdef SYSLOG
-				" -syslog             enable logging to syslog\n"
-				"                     mutually exclusive with -log\n"
-				" -tag TAG            sets syslog tag (default 'simutrans')\n"
+			" -syslog             enable logging to syslog\n"
+			"                     mutually exclusive with -log\n"
+			" -tag TAG            sets syslog tag (default 'simutrans')\n"
 #endif
-				" -noaddons           does not load any addon (default)\n"
-				" -nomidi             turns off background music\n"
-				" -nosound            turns off ambient sounds\n"
-				" -objects DIR_NAME/  load the pakset in specified directory\n"
-				" -pause              starts game with paused after loading\n"
-				" -res N              starts in specified resolution: \n"
-				"                      1=640x480, 2=800x600, 3=1024x768, 4=1280x1024\n"
-				" -screensize WxH     set screensize to width W and height H\n"
-				" -server [PORT]      starts program as server (for network game)\n"
-				"                     without port specified uses 13353\n"
-				" -announce           Enable server announcements\n"
-				" -server_dns FQDN/IP FQDN or IP address of server for announcements\n"
-				" -server_name NAME   Name of server for announcements\n"
-				" -server_admin_pw PW password for server administration\n"
-				" -singleuser         Save everything in program directory (portable version)\n"
+			" -noaddons           does not load any addon (default)\n"
+			" -nomidi             turns off background music\n"
+			" -nosound            turns off ambient sounds\n"
+			" -objects DIR_NAME/  load the pakset in specified directory\n"
+			" -pause              starts game with paused after loading\n"
+			" -res N              starts in specified resolution: \n"
+			"                      1=640x480, 2=800x600, 3=1024x768, 4=1280x1024\n"
+			" -screensize WxH     set screensize to width W and height H\n"
+			" -server [PORT]      starts program as server (for network game)\n"
+			"                     without port specified uses 13353\n"
+			" -announce           Enable server announcements\n"
+			" -server_dns FQDN/IP FQDN or IP address of server for announcements\n"
+			" -server_name NAME   Name of server for announcements\n"
+			" -server_admin_pw PW password for server administration\n"
+			" -singleuser         Save everything in program directory (portable version)\n"
 #ifdef DEBUG
-				" -sizes              Show current size of some structures\n"
+			" -sizes              Show current size of some structures\n"
 #endif
-				" -startyear N        start in year N\n"
-				" -theme N            user directory containing theme files\n"
+			" -startyear N        start in year N\n"
+			" -theme N            user directory containing theme files\n"
 #ifdef MULTI_THREAD
-				" -threads N          use N threads if possible\n"
+			" -threads N          use N threads if possible\n"
 #endif
-				" -timeline           enables timeline\n"
+			" -timeline           enables timeline\n"
 #if defined DEBUG || defined PROFILE
-				" -times              does some simple profiling\n"
-				" -until MONTH        quits when MONTH = (month*12+year-1) starts\n"
+			" -times              does some simple profiling\n"
+			" -until MONTH        quits when MONTH = (month*12+year-1) starts\n"
 #endif
-				" -use_workdir        use current dir as basedir\n"
-				);
-			return false;
+			" -use_workdir        use current dir as basedir\n"
+		);
+		return 0;
 	}
-
-#ifdef REVISION
-	const char *version = "Simutrans version " VERSION_NUMBER " from " VERSION_DATE " r" QUOTEME(REVISION) "\n";
-#else
-	const char *version = "Simutrans version " VERSION_NUMBER " from " VERSION_DATE "\n";
-#endif
-
-
 
 #ifdef _WIN32
 #define PATHSEP "\\"
@@ -389,15 +524,17 @@ bool game_loop_t::init() {
 	printf("Use work dir %s\n", env_t::program_dir);
 
 	// only the specified pak conf should override this!
-	pak_diagonal_multiplier = env_t::default_settings.get_pak_diagonal_multiplier();
-	pak_tile_height = TILE_HEIGHT_STEP;
+	uint16 pak_diagonal_multiplier = env_t::default_settings.get_pak_diagonal_multiplier();
+	sint8 pak_tile_height = TILE_HEIGHT_STEP;
 
 	// parsing config/simuconf.tab
 	printf("Reading low level config data ...\n");
-	found_settings = false;
-	found_simuconf = false;
-	multiuser = (gimme_arg(argc, argv, "-singleuser", 0) == NULL);
+	bool found_settings = false;
+	bool found_simuconf = false;
+	bool multiuser = (gimme_arg(argc, argv, "-singleuser", 0) == NULL);
 
+	tabfile_t simuconf;
+	char path_to_simuconf[24];
 	// was  config/simuconf.tab
 	sprintf(path_to_simuconf, "config%csimuconf.tab", path_sep[0]);
 	if(simuconf.open(path_to_simuconf)) {
@@ -421,8 +558,67 @@ bool game_loop_t::init() {
 	}
 	chdir( env_t::user_dir );
 
-	// now read last setting (might be overwritten by the tab-files)
 
+#ifdef REVISION
+	const char *version = "Simutrans version " VERSION_NUMBER " from " VERSION_DATE " r" QUOTEME(REVISION) "\n";
+#else
+	const char *version = "Simutrans version " VERSION_NUMBER " from " VERSION_DATE "\n";
+#endif
+
+
+	/*** Begin logging set up ***/
+
+#ifdef SYSLOG
+	bool cli_syslog_enabled = (gimme_arg( argc, argv, "-syslog", 0 ) != NULL);
+	const char* cli_syslog_tag = gimme_arg( argc, argv, "-tag", 1 );
+#else //SYSLOG
+	bool cli_syslog_enabled = false;
+	const char* cli_syslog_tag = NULL;
+#endif //SYSLOG
+
+	env_t::verbose_debug = 0;
+	if(  gimme_arg(argc, argv, "-debug", 0) != NULL  ) {
+		const char *s = gimme_arg(argc, argv, "-debug", 1);
+		int level = 4;
+		if(s!=NULL  &&  s[0]>='0'  &&  s[0]<='9'  ) {
+			level = atoi(s);
+		}
+		env_t::verbose_debug = level;
+	}
+
+	if (  cli_syslog_enabled  ) {
+		printf("syslog enabled\n");
+		if (  cli_syslog_tag  ) {
+			printf("Init logging with syslog tag: %s\n", cli_syslog_tag);
+			init_logging( "syslog", true, true, version, cli_syslog_tag );
+		}
+		else {
+			printf("Init logging with default syslog tag\n");
+			init_logging( "syslog", true, true, version, "simutrans" );
+		}
+	}
+	else if (gimme_arg(argc, argv, "-log", 0)) {
+		chdir( env_t::user_dir );
+		char temp_log_name[256];
+		const char *logname = "simu.log";
+		if(  gimme_arg(argc, argv, "-server", 0)  ) {
+			const char *p = gimme_arg(argc, argv, "-server", 1);
+			int portadress = p ? atoi( p ) : 13353;
+			sprintf( temp_log_name, "simu-server%d.log", portadress==0 ? 13353 : portadress );
+			logname = temp_log_name;
+		}
+		init_logging( logname, true, gimme_arg(argc, argv, "-log", 0 ) != NULL, version, NULL );
+	}
+	else if (gimme_arg(argc, argv, "-debug", 0) != NULL) {
+		init_logging( "stderr", true, gimme_arg(argc, argv, "-debug", 0 ) != NULL, version, NULL );
+	}
+	else {
+		init_logging(NULL, false, false, version, NULL);
+	}
+	/*** End logging set up ***/
+
+	// now read last setting (might be overwritten by the tab-files)
+	loadsave_t file;
 	if(file.rd_open("settings.xml"))  {
 		if(  file.get_version()>loadsave_t::int_version(SAVEGAME_VER_NR, NULL, NULL )  ) {
 			// too new => remove it
@@ -446,16 +642,16 @@ bool game_loop_t::init() {
 	if(  found_simuconf  ) {
 		if(simuconf.open(path_to_simuconf)) {
 			printf("parse_simuconf() at config/simuconf.tab: ");
-//			env_t::default_settings.parse_simuconf( simuconf, disp_width, disp_height, fullscreen, env_t::objfilename ); TODO
+			env_t::default_settings.parse_simuconf( simuconf, disp_width, disp_height, fullscreen, env_t::objfilename );
 		}
 	}
 
 	// a portable installation could have a personal simuconf.tab in the main dir of simutrans
 	// otherwise it is in ~/simutrans/simuconf.tab
-	obj_conf = string(env_t::user_dir) + "simuconf.tab";
+	string obj_conf = string(env_t::user_dir) + "simuconf.tab";
 	if (simuconf.open(obj_conf.c_str())) {
 		printf("parse_simuconf() at %s: ", obj_conf.c_str() );
-//		env_t::default_settings.parse_simuconf( simuconf, disp_width, disp_height, fullscreen, env_t::objfilename ); TODO
+		env_t::default_settings.parse_simuconf( simuconf, disp_width, disp_height, fullscreen, env_t::objfilename );
 	}
 
 	// env: override previous settings
@@ -515,76 +711,135 @@ bool game_loop_t::init() {
 	DBG_MESSAGE("program_dir", "%s", env_t::program_dir);
 	DBG_MESSAGE("home_dir",    "%s", env_t::user_dir);
 	DBG_MESSAGE("locale",      "%s", dr_get_locale_string());
-	//#ifdef DEBUG
+//#ifdef DEBUG
 	if (gimme_arg(argc, argv, "-sizes", 0) != NULL) {
 		// show the size of some structures ...
 		show_sizes();
 	}
-	//#endif
+//#endif
 
 	// prepare skins first
 	bool themes_ok = false;
 	if(  const char *themestr = gimme_arg(argc, argv, "-theme", 1)  ) {
 		chdir( env_t::user_dir );
+		chdir( "themes" );
 		themes_ok = gui_theme_t::themes_init(themestr);
+		if(  !themes_ok  ) {
+			chdir( env_t::program_dir );
+			chdir( "themes" );
+			themes_ok = gui_theme_t::themes_init(themestr);
+		}
 	}
+	// specified themes not found => try default themes
 	if(  !themes_ok  ) {
 		chdir( env_t::program_dir );
 		chdir( "themes" );
 		themes_ok = gui_theme_t::themes_init("themes.tab");
 	}
+	if(  !themes_ok  ) {
+		dbg->fatal( "simmain()", "No GUI themes found! Please re-install!" );
+	}
 	chdir( env_t::program_dir );
+
+	// likely only the program without graphics was downloaded
+	if (gimme_arg(argc, argv, "-res", 0) != NULL) {
+		const char* res_str = gimme_arg(argc, argv, "-res", 1);
+		const int res = *res_str - '1';
+
+		switch (res) {
+			case 0:
+			case 1:
+			case 2:
+			case 3:
+			case 4:
+			case 5:
+				fullscreen = (res<=4);
+				disp_width  = resolutions[res][0];
+				disp_height = resolutions[res][1];
+				break;
+
+			default:
+				fprintf(stderr,
+					"invalid resolution, argument must be 1,2,3 or 4\n"
+					"1=640x480, 2=800x600, 3=1024x768, 4=1280x1024, 5=windowed\n"
+				);
+				return 0;
+		}
+	}
+
+	fullscreen |= (gimme_arg(argc, argv, "-fullscreen", 0) != NULL);
+
+	if(gimme_arg(argc, argv, "-screensize", 0) != NULL) {
+		const char* res_str = gimme_arg(argc, argv, "-screensize", 1);
+		int n = 0;
+
+		if (res_str != NULL) {
+			n = sscanf(res_str, "%hdx%hd", &disp_width, &disp_height);
+		}
+
+		if (n != 2) {
+			fprintf(stderr,
+				"invalid argument for -screensize option\n"
+				"argument must be of format like 800x600\n"
+			);
+			return 1;
+		}
+	}
+
+	int parameter[2];
+	parameter[0] = gimme_arg( argc, argv, "-async", 0) != NULL;
+	parameter[1] = gimme_arg( argc, argv, "-use_hw", 0) != NULL;
+	if (!dr_os_init(parameter)) {
+		dr_fatal_notify("Failed to initialize backend.\n");
+		return EXIT_FAILURE;
+	}
+
+	// Get optimal resolution.
+	if (disp_width == 0 || disp_height == 0) {
+		resolution const res = dr_query_screen_resolution();
+		if (fullscreen) {
+			disp_width  = res.w;
+			disp_height = res.h;
+		} else {
+			disp_width  = min(704, res.w);
+			disp_height = min(560, res.h);
+		}
+	}
+
+	dbg->important("Preparing display ...");
+	DBG_MESSAGE("simmain", "simgraph_init disp_width=%d, disp_height=%d, fullscreen=%d", disp_width, disp_height, fullscreen);
+	simgraph_init(disp_width, disp_height, fullscreen);
+	DBG_MESSAGE("simmain", ".. results in disp_width=%d, disp_height=%d", display_get_width(), display_get_height());
 
 	// The loading screen needs to be initialized
 	show_pointer(1);
 
 	// if no object files given, we ask the user
 	if(  env_t::objfilename.empty()  ) {
-		sel = new pakselector_t();
-		sel->fill_list();
-		if(!sel->has_pak()) {
+		ask_objfilename();
+		if(  env_t::quit_simutrans  ) {
+			simgraph_exit();
+			return 0;
+		}
+		if(  env_t::objfilename.empty()  ) {
+			// try to download missing paks
 			if(  dr_download_pakset( env_t::program_dir, env_t::program_dir == env_t::user_dir )  ) {
-				sel->fill_list();
-				if(!sel->has_pak()) {
-					dr_fatal_notify("*** No pak set found ***\n\nMost likely, you have no pak set installed.\nPlease download and install a pak set (graphics).\n");
-					return false;
+				ask_objfilename();
+				if(  env_t::quit_simutrans  ) {
+					simgraph_exit();
+					return 0;
 				}
 			}
+			// still nothing?
+			if(  env_t::objfilename.empty()  ) {
+				// nothing to be loaded => exit
+				dr_fatal_notify("*** No pak set found ***\n\nMost likely, you have no pak set installed.\nPlease download and install a pak set (graphics).\n");
+				simgraph_exit();
+				return 0;
+			}
 		}
-
-		guimanager_t::get_singleton_ptr()->add_simple_frame(sel);
-
-		current_state=GLS_WAITFORPAK;
 	}
-	else {
-		current_state=GLS_PAKSELECTED;
-	}
-}
 
-bool game_loop_t::waitforpak()
-{
-	if(  ! env_t::objfilename.empty()  ) {
-		current_state=GLS_PAKSELECTED;
-	}
-	return true;
-}
-
-
-void game_loop_t::frameended() {
-/*	dbg->debug("game_loop_t","ENDED!");
-	printf("game_loop_t: Ended!\n");*/
-}
-
-game_loop_t::game_loop_t( int argc, char** argv )
-{
-	this->argc = argc;
-	this->argv = argv;
-
-	current_state = GLS_INIT;
-}
-
-bool game_loop_t::pakselected()
-{
 	// check for valid pak path
 	{
 		cbuffer_t buf;
@@ -686,10 +941,10 @@ bool game_loop_t::pakselected()
 	if(  !translator::load(env_t::objfilename)  ) {
 		// installation error: likely only program started
 		dbg->fatal("simmain::main()", "Unable to load any language files\n"
-			"*** PLEASE INSTALL PROPER BASE FILES ***\n\n"
-			"either run ./get_lang_files.sh\n\nor\n\n"
-			"download a complete simutrans archive and put the text/ folder here."
-			);
+		                              "*** PLEASE INSTALL PROPER BASE FILES ***\n\n"
+							"either run ./get_lang_files.sh\n\nor\n\n"
+							"download a complete simutrans archive and put the text/ folder here."
+		);
 		exit(11);
 	}
 
@@ -722,24 +977,18 @@ bool game_loop_t::pakselected()
 	dbg->important("Reading menu configuration ...");
 	werkzeug_t::init_menu();
 
-
 	// loading all paks
 	dbg->important("Reading object data from %s...", env_t::objfilename.c_str());
-//	obj_reader_t::load( );
-
-	pakloading_task = new pakloader_task_t();
-
-	current_state = GLS_WAITFORPAKLOADED;
-}
-
-bool game_loop_t::waitforpakloaded()
-{
-	if (pakloading_task->get_state()!=task_t::STATE_DONE){
-		return true;
+	obj_reader_t::load(env_t::objfilename.c_str(), translator::translate("Loading paks ...") );
+	if(  env_t::default_settings.get_with_private_paks()  ) {
+		// try to read addons from private directory
+		chdir( env_t::user_dir );
+		if(!obj_reader_t::load(("addons/" + env_t::objfilename).c_str(), translator::translate("Loading addon paks ..."))) {
+			fprintf(stderr, "reading addon object data failed (disabling).\n");
+			env_t::default_settings.set_with_private_paks( false );
+		}
+		chdir( env_t::program_dir );
 	}
-
-	delete pakloading_task;
-
 	obj_reader_t::laden_abschliessen();
 	pakset_info_t::calculate_checksum();
 	pakset_info_t::debug();
@@ -748,17 +997,7 @@ bool game_loop_t::waitforpakloaded()
 	werkzeug_t::read_menu(env_t::objfilename);
 
 	if(  translator::get_language()==-1  ) {
-		if(  display_get_width()==0  ) {
-			// only console available ... => choose english for the moment
-			dbg->warning( "ask_language", "No language selected, will use english!" );
-			translator::set_language( "en" );
-		}
-		else {
-			sprachengui_t* sel = new sprachengui_t();
-			destroy_all_win(true);	// since eventually the successful load message is still there ....
-//			modal_dialogue( sel, magic_none, NULL, no_language ); TODO
-			destroy_win( sel );
-		}
+		ask_language();
 	}
 
 	bool new_world = true;
@@ -866,11 +1105,11 @@ DBG_MESSAGE("simmain","loadgame file found at %s",buffer);
 		sound_set_midi_volume( env_t::midi_volume );
 	}
 
-	welt = new karte_t();
+	karte_t *welt = new karte_t();
 	karte_ansicht_t *view = new karte_ansicht_t(welt);
 	welt->set_view( view );
 
-	interaction_t *eventmanager = new interaction_t(welt);
+	interaction_t *eventmanager = new interaction_t();
 	welt->set_eventmanager( eventmanager );
 
 	// some messages about old vehicle may appear ...
@@ -927,7 +1166,7 @@ DBG_MESSAGE("simmain","loadgame file found at %s",buffer);
 		//  start in June ...
 		intr_set(welt, view);
 		win_set_world(welt);
-		werkzeug_t::toolbar_tool[0]->init(welt,welt->get_active_player());
+		werkzeug_t::toolbar_tool[0]->init(welt->get_active_player());
 		welt->set_fast_forward(true);
 		welt->sync_step(5000,true,false);
 		welt->step_month(5);
@@ -943,7 +1182,7 @@ DBG_MESSAGE("simmain","loadgame file found at %s",buffer);
 		// just init view (world was loaded from file)
 		intr_set(welt, view);
 		win_set_world(welt);
-		werkzeug_t::toolbar_tool[0]->init(welt,welt->get_active_player());
+		werkzeug_t::toolbar_tool[0]->init(welt->get_active_player());
 	}
 
 	welt->set_fast_forward(false);
@@ -995,14 +1234,6 @@ DBG_MESSAGE("simmain","loadgame file found at %s",buffer);
 	if(  !env_t::networkmode  &&  !env_t::server  ) {
 		welt->get_message()->clear();
 	}
-
-
-	world_sync_task_t* worldsync_task = new world_sync_task_t(welt);
-	simworldeventmanager_t* simworldeventmanager = new simworldeventmanager_t(welt);
-
-	current_state = GLS_FINAL;
-	return true;
-
 	while(  !env_t::quit_simutrans  ) {
 		// play next tune?
 		check_midi();
@@ -1010,7 +1241,7 @@ DBG_MESSAGE("simmain","loadgame file found at %s",buffer);
 		if(  !env_t::networkmode  &&  new_world  ) {
 			dbg->important( "Show banner ... " );
 			ticker::add_msg("Welcome to Simutrans", koord::invalid, PLAYER_FLAG + 1);
-//			modal_dialogue( new banner_t(welt), magic_none, welt, never_quit ); TODO
+			modal_dialogue( new banner_t(), magic_none, welt, never_quit );
 			// only show new world, if no other dialoge is active ...
 			new_world = win_get_open_count()==0;
 		}
@@ -1027,14 +1258,13 @@ DBG_MESSAGE("simmain","loadgame file found at %s",buffer);
 		}
 
 		if(  new_world  ) {
-//			modal_dialogue( new welt_gui_t(welt, &env_t::default_settings), magic_welt_gui_t, welt, never_quit ); TODO
+			modal_dialogue( new welt_gui_t(&env_t::default_settings), magic_welt_gui_t, welt, never_quit );
 			if(  env_t::quit_simutrans  ) {
 				break;
 			}
 		}
 		dbg->important( "Running world, pause=%i, fast forward=%i ... ", welt->is_paused(), welt->is_fast_forward() );
 		loadgame = ""; // only first time
-
 
 		// run the loop
 		welt->interactive(quit_month);
@@ -1080,198 +1310,6 @@ DBG_MESSAGE("simmain","loadgame file found at %s",buffer);
 	// free all list memories (not working, since there seems to be unitialized list still waiting for automated destruction)
 	freelist_t::free_all_nodes();
 #endif
-
-	return true;
-}
-
-// This needs to be moved to a scheduling class, temporary location
-
-#define MS_PER_STEP 166
-unsigned long start_time = 0;
-unsigned long next_step;
-world_step_task_t *task_step;
-
-bool game_loop_t::state_final()
-{
-
-	if (!start_time) {
-		//init
-
-		start_time = dr_time();
-		next_step = start_time+MS_PER_STEP;
-
-		task_step = new world_step_task_t(welt);
-
-	}
-
-	if (next_step <= dr_time() && task_step->get_state() == task_t::STATE_DONE ) {
-		task_step->reset();
-		next_step = next_step+MS_PER_STEP;
-	}
-
-	return true;
-}
-
-/*
- * DELETE
- */
-
-void modal_dialogue( gui_frame_t *gui, ptrdiff_t magic, karte_t *welt, bool (*quit)() )
-{
-	if(  display_get_width()==0  ) {
-		dbg->error( "modal_dialogue()", "called without a display driver => nothing will be shown!" );
-		env_t::quit_simutrans = true;
-		// cannot handle this!
-		return;
-	}
-
-	event_t ev;
-	create_win( (display_get_width()-gui->get_fenstergroesse().x)/2, (display_get_height()-gui->get_fenstergroesse().y)/2, gui, w_info, magic );
-
-	if(  welt  ) {
-		welt->set_pause( false );
-		welt->reset_interaction();
-		welt->reset_timer();
-
-		long ms_pause = max( 25, 1000/env_t::fps );
-		uint32 last_step = dr_time()+ms_pause;
-		uint step_count = 5;
-		while(  win_is_open(gui)  &&  !env_t::quit_simutrans  &&  !quit()  ) {
-			do {
-				DBG_DEBUG4("zeige_banner", "calling win_poll_event");
-				win_poll_event(&ev);
-				// no toolbar events
-				if(  ev.my < werkzeug_t::toolbar_tool[0]->iconsize.y  ) {
-					ev.my = werkzeug_t::toolbar_tool[0]->iconsize.y;
-				}
-				if(  ev.cy < werkzeug_t::toolbar_tool[0]->iconsize.y  ) {
-					ev.cy = werkzeug_t::toolbar_tool[0]->iconsize.y;
-				}
-				if(  ev.ev_class == EVENT_KEYBOARD  &&  ev.ev_code == SIM_KEY_F1  ) {
-					if(  gui_frame_t *win = win_get_top()  ) {
-						if(  const char *helpfile = win->get_hilfe_datei()  ) {
-							help_frame_t::open_help_on( helpfile );
-							continue;
-						}
-					}
-				}
-				DBG_DEBUG4("zeige_banner", "calling check_pos_win");
-				check_pos_win(&ev);
-				if(  ev.ev_class == EVENT_SYSTEM  &&  ev.ev_code == SYSTEM_QUIT  ) {
-					env_t::quit_simutrans = true;
-					break;
-				}
-				dr_sleep(5);
-			} while(  dr_time()<last_step  );
-			DBG_DEBUG4("zeige_banner", "calling welt->sync_step");
-			welt->sync_step( ms_pause, true, true );
-			DBG_DEBUG4("zeige_banner", "calling welt->step");
-			if(  step_count--==0  ) {
-				welt->step();
-				step_count = 5;
-			}
-			last_step += ms_pause;
-		}
-	}
-	else {
-		display_show_pointer(true);
-		show_pointer(1);
-		set_pointer(0);
-		display_fillbox_wh( 0, 0, display_get_width(), display_get_height(), COL_BLACK, true );
-		while(  win_is_open(gui)  &&  !env_t::quit_simutrans  &&  !quit()  ) {
-			// do not move, do not close it!
-			dr_sleep(50);
-			dr_prepare_flush();
-			gui->zeichnen(win_get_pos(gui), gui->get_fenstergroesse());
-			dr_flush();
-
-			display_poll_event(&ev);
-			if(ev.ev_class==EVENT_SYSTEM) {
-				if (ev.ev_code==SYSTEM_RESIZE) {
-					// main window resized
-					simgraph_resize( ev.mx, ev.my );
-					dr_prepare_flush();
-					display_fillbox_wh( 0, 0, ev.mx, ev.my, COL_BLACK, true );
-					dr_flush();
-				}
-				else if (ev.ev_code == SYSTEM_QUIT) {
-					env_t::quit_simutrans = true;
-					break;
-				}
-			}
-			else {
-				// other events
-				check_pos_win(&ev);
-			}
-		}
-		set_pointer(1);
-		dr_prepare_flush();
-		display_fillbox_wh( 0, 0, display_get_width(), display_get_height(), COL_BLACK, true );
-		dr_flush();
-	}
-
-	// just trigger not another following window => wait for button release
-	if (IS_LEFTCLICK(&ev)) {
-		do {
-			display_get_event(&ev);
-		} while (!IS_LEFTRELEASE(&ev));
-	}
-}
-
-
-// some routines for the modal display
-static bool never_quit() { return false; }
-static bool empty_objfilename() { return !env_t::objfilename.empty(); }
-static bool no_language() { return translator::get_language()!=-1; }
-
-
-
-/**
- * Show pak selector DELETE
- */
-static void ask_objfilename()
-{
-	pakselector_t* sel = new pakselector_t();
-	sel->fill_list();
-	if(sel->has_pak()) {
-		destroy_all_win(true);	// since eventually the successful load message is still there ....
-		modal_dialogue( sel, magic_none, NULL, empty_objfilename );
-	}
-	else {
-		delete sel;
-	}
-}
-
-/**
- * Show language selector
- */
-static void ask_language()
-{
-	if(  display_get_width()==0  ) {
-		// only console available ... => choose english for the moment
-		dbg->warning( "ask_language", "No language selected, will use english!" );
-		translator::set_language( "en" );
-	}
-	else {
-		sprachengui_t* sel = new sprachengui_t();
-		destroy_all_win(true);	// since eventually the successful load message is still there ....
-		modal_dialogue( sel, magic_none, NULL, no_language );
-		destroy_win( sel );
-	}
-}
-
-
-int simu_main(int argc, char** argv)
-{
-
-	// Initialize the framework
-	root_t root(argc,argv);
-
-	game_loop_t *loop = new game_loop_t(argc,argv);
-
-	root.add_framelistener(loop);
-	root.start();
-
 
 	return 0;
 }
