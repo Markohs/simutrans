@@ -23,14 +23,14 @@ themeselector_t::themeselector_t() :
 	savegame_frame_t( ".tab", false, NULL, false )
 {
 	// remove unnecessary buttons
-	remove_komponente( &input );
+	remove_component( &input );
 	delete_enabled = false;
 	label_enabled  = false;
 
 	set_name( translator::translate( "Theme selector" ) );
 	fnlabel.set_text_pointer( translator::translate( "Select a theme for display" ) );
 	if( undo.empty() ) {
-		undo = gui_theme_t::get_current_theme();
+		undo = env_t::default_theme;
 		set_windowsize(get_min_windowsize());
 	}
 }
@@ -112,7 +112,7 @@ void themeselector_t::fill_list()
 		delete[] i.button->get_text(); // free up default allocation.
 		i.button->set_typ(button_t::roundbox_state);
 		i.button->set_text(i.label->get_text_pointer());
-		i.button->pressed = !strcmp( gui_theme_t::get_current_theme(), i.label->get_text_pointer() ); // mark current theme
+		i.button->pressed = !strcmp( env_t::default_theme.c_str(), i.label->get_text_pointer() ); // mark current theme
 		i.label->set_text_pointer( NULL ); // remove reference to prevent conflicts at delete[]
 
 		// Get a new label buffer since the original is now owned by i.button.

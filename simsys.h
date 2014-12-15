@@ -89,6 +89,8 @@ char const* dr_query_homedir();
 
 unsigned short* dr_textur_init();
 
+// returns the file path to a font file
+const char *dr_query_fontpath( const char * fontname );
 
 void dr_textur(int xp, int yp, int w, int h);
 
@@ -117,7 +119,7 @@ void ex_ord_update_mx_my();
 void GetEvents();
 void GetEventsNoWait();
 
-unsigned long dr_time();
+uint32 dr_time();
 void dr_sleep(uint32 millisec);
 
 // error message in case of fatal events
@@ -155,6 +157,18 @@ size_t dr_paste(char *target, size_t max_length);
  * @return false, if nothing was downloaded
  */
 bool dr_download_pakset( const char *path_to_program, bool portable );
+
+/**
+ * Shows the touch keyboard when using systems without a hardware keyboard.
+ * Will be ignored if there is an hardware keyboard available.
+ */
+void dr_start_textinput();
+
+/**
+ * Hides the touch keyboard when using systems without a hardware keyboard.
+ * Will be ignored it there is no on-display keyboard shown.
+ */
+void dr_stop_textinput();
 
 int sysmain(int argc, char** argv);
 

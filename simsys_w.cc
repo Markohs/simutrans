@@ -8,14 +8,9 @@
 #error "Only Windows has GDI!"
 #endif
 
-// windows Bibliotheken DirectDraw 5.x (must be defined before any includes!)
-#define UNICODE 1
-
 #include <stdio.h>
 #include <stdlib.h>
 
-// windows.h defines min and max macros which we don't want
-#define NOMINMAX 1
 #include <windows.h>
 #include <winreg.h>
 #include <wingdi.h>
@@ -23,6 +18,10 @@
 
 #include "display/simgraph.h"
 #include "simdebug.h"
+
+#include "gui/simwin.h"
+#include "gui/components/gui_komponente.h"
+#include "gui/components/gui_textinput.h"
 
 
 // needed for wheel
@@ -96,8 +95,19 @@ static void create_window(DWORD const ex_style, DWORD const style, int const x, 
 {
 	RECT r = { 0, 0, w, h };
 	AdjustWindowRectEx(&r, style, false, ex_style);
+
+#if 0
+	// Try with a wide character window; need the title with full width
+	WCHAR *wSIM_TITLE = new wchar_t[lengthof(SIM_TITLE)];
+	size_t convertedChars = 0;
+	mbstowcs( wSIM_TITLE, SIM_TITLE, lengthof(SIM_TITLE) );
+	hwnd = CreateWindowExW(ex_style, L"Simu", wSIM_TITLE, style, x, y, r.right - r.left, r.bottom - r.top, 0, 0, hInstance, 0);
+#else
 	hwnd = CreateWindowExA(ex_style, "Simu", SIM_TITLE, style, x, y, r.right - r.left, r.bottom - r.top, 0, 0, hInstance, 0);
+#endif
+
 	ShowWindow(hwnd, SW_SHOW);
+	SetTimer( hwnd, 0, 1111, NULL );	// HACK: so windows thinks we are not dead when processing a timer every 1111 ms ...
 }
 
 
@@ -397,6 +407,34 @@ LRESULT WINAPI WindowProc(HWND this_hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 	static int last_mb = 0;	// last mouse button state
 	switch (msg) {
 
+#if 0
+		// help: this is ignored by the IME sio far
+		case WM_IME_REQUEST:
+			switch( wParam ) {
+				case IMR_QUERYCHARPOSITION:
+					// IME wants to open
+					if(  gui_component_t *c = win_get_focus()  ) {
+						scr_coord gui_xy = win_get_pos( win_get_top() );
+						if(  gui_textinput_t *tinp = dynamic_cast<gui_textinput_t *>(c)  ) {
+							IMECHARPOSITION *icp = ((IMECHARPOSITION *)lParam);
+							icp->dwSize = sizeof(IMECHARPOSITION);
+							icp->pt.x = tinp->get_pos().x+gui_xy.x+tinp->get_current_cursor_x();
+							icp->pt.y = tinp->get_pos().y+gui_xy.y;
+							icp->cLineHeight = LINESPACE;
+							icp->rcDocument.left = tinp->get_pos().x+gui_xy.x;
+							icp->rcDocument.top = tinp->get_pos().y+gui_xy.y;
+							icp->rcDocument.right = tinp->get_pos().x+gui_xy.x+tinp->get_size().w;
+							icp->rcDocument.bottom = tinp->get_pos().y+gui_xy.y+tinp->get_size().h;
+							return 1;
+						}
+					}
+			}
+			break;
+#endif
+
+		case WM_TIMER:	// dummy timer even to keep windows thinking we are still active
+			return 0;
+
 		case WM_ACTIVATE: // may check, if we have to restore color depth
 			if(is_fullscreen) {
 				// avoid double calls
@@ -616,7 +654,7 @@ LRESULT WINAPI WindowProc(HWND this_hwnd, UINT msg, WPARAM wParam, LPARAM lParam
 			break;
 
 		default:
-			return DefWindowProc(this_hwnd, msg, wParam, lParam);
+			return DefWindowProcW(this_hwnd, msg, wParam, lParam);
 	}
 	return 0;
 }
@@ -629,7 +667,8 @@ static void internal_GetEvents(bool const wait)
 		GetMessage(&msg, NULL, 0, 0);
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
-	} while (wait && sys_event.type == SIM_NOEVENT);
+	} while(wait && sys_event.type == SIM_NOEVENT);
+
 }
 
 
@@ -668,7 +707,7 @@ void ex_ord_update_mx_my()
 
 
 
-unsigned long dr_time()
+uint32 dr_time()
 {
 	return timeGetTime();
 }
@@ -681,6 +720,13 @@ void dr_sleep(uint32 millisec)
 	Sleep(millisec);
 }
 
+void dr_start_textinput()
+{
+}
+
+void dr_stop_textinput()
+{
+}
 
 #ifdef _MSC_VER
 // Needed for MS Visual C++ with /SUBSYSTEM:CONSOLE to work , if /SUBSYSTEM:WINDOWS this function is compiled but unreachable
@@ -707,8 +753,7 @@ int CALLBACK WinMain(HINSTANCE const hInstance, HINSTANCE, LPSTR, int)
 	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
 	wc.hbrBackground = (HBRUSH) (COLOR_BACKGROUND + 1);
 	wc.lpszMenuName = NULL;
-
-	RegisterClass(&wc);
+	RegisterClassW(&wc);
 
 	GetWindowRect(GetDesktopWindow(), &MaxSize);
 

@@ -63,9 +63,7 @@ planquadrat_t::~planquadrat_t()
 		}
 		delete [] data.some;
 	}
-	if(halt_list) {
-		delete [] halt_list;
-	}
+	delete [] halt_list;
 	halt_list_count = 0;
 	// to avoid access to this tile
 	ground_size = 0;
@@ -401,7 +399,19 @@ void planquadrat_t::angehoben()
 			// recalc water ribis
 			for(int r=0; r<4; r++) {
 				grund_t *gr2 = welt->lookup_kartenboden(k + koord::nsow[r]);
-				if (gr2  &&  gr2->ist_wasser()) {
+				if(  gr2  &&  gr2->ist_wasser()  ) {
+					gr2->calc_bild();
+				}
+			}
+		}
+		else if(  slope == 0  &&  gr->get_hoehe() == welt->get_water_hgt(k)  &&  gr->get_typ() == grund_t::wasser  ) {
+			// water at zero level => make it land
+			gr = new boden_t(gr->get_pos(), slope );
+			kartenboden_setzen( gr );
+			// recalc water ribis
+			for(int r=0; r<4; r++) {
+				grund_t *gr2 = welt->lookup_kartenboden(k + koord::nsow[r]);
+				if(  gr2  &&  gr2->ist_wasser()  ) {
 					gr2->calc_bild();
 				}
 			}
@@ -427,12 +437,14 @@ void planquadrat_t::display_obj(const sint16 xpos, const sint16 ypos, const sint
 		for(  ;  i < ground_size;  i++  ) {
 			const grund_t* gr = data.some[i];
 			const sint8 h = gr->get_hoehe();
+			const hang_t::typ slope = gr->get_grund_hang();
+			const sint8 htop = h + max(max(corner1(slope), corner2(slope)),max(corner3(slope), corner4(slope)));
 			// above ground
 			if(  h > h0  ) {
 				break;
 			}
 			// not too low?
-			if(  h >= hmin  ) {
+			if(  htop >= hmin  ) {
 				const sint16 yypos = ypos - tile_raster_scale_y( (h - h0) * TILE_HEIGHT_STEP, raster_tile_width );
 #ifdef MULTI_THREAD
 				gr->display_boden( xpos, yypos, raster_tile_width, clip_num );
@@ -472,12 +484,14 @@ void planquadrat_t::display_obj(const sint16 xpos, const sint16 ypos, const sint
 #endif
 			for(  uint8 j = i;  j < ground_size;  j++  ) {
 				const sint8 h = data.some[j]->get_hoehe();
+				const hang_t::typ slope = data.some[j]->get_grund_hang();
+				const sint8 htop = h + max(max(corner1(slope), corner2(slope)),max(corner3(slope), corner4(slope)));
 				// too high?
 				if(  h > hmax  ) {
 					break;
 				}
 				// not too low?
-				if(  h >= hmin  ) {
+				if(  htop >= hmin  ) {
 					// something on top: clip horizontally to prevent trees etc shining trough bridges
 					const sint16 yh = ypos - tile_raster_scale_y( (h - h0) * TILE_HEIGHT_STEP, raster_tile_width ) + ((3 * raster_tile_width) >> 2);
 					if(  yh >= p_cr.y  ) {
@@ -510,12 +524,14 @@ void planquadrat_t::display_obj(const sint16 xpos, const sint16 ypos, const sint
 	for(  ;  i < ground_size;  i++  ) {
 		const grund_t* gr = data.some[i];
 		const sint8 h = gr->get_hoehe();
+		const hang_t::typ slope = gr->get_grund_hang();
+		const sint8 htop = h + max(max(corner1(slope), corner2(slope)),max(corner3(slope), corner4(slope)));
 		// too high?
 		if(  h > hmax  ) {
 			break;
 		}
 		// not too low?
-		if(  h >= hmin  ) {
+		if(  htop >= hmin  ) {
 			const sint16 yypos = ypos - tile_raster_scale_y( (h - h0) * TILE_HEIGHT_STEP, raster_tile_width );
 #ifdef MULTI_THREAD
 			gr->display_boden( xpos, yypos, raster_tile_width, clip_num );
@@ -601,7 +617,7 @@ void planquadrat_t::display_overlay(const sint16 xpos, const sint16 ypos) const
 				display_img_blend( img, xpos, ypos, transparent | TRANSPARENT25_FLAG, 0, 0);
 			}
 /*
-// unfourtunately, too expensive for display
+// unfortunately, too expensive for display
 			// plot player outline colours - we always plot in order of players so that the order of the stations in halt_list
 			// doesn't affect the colour displayed [since blend(col1,blend(col2,screen)) != blend(col2,blend(col1,screen))]
 			for(int spieler_count = 0; spieler_count<MAX_PLAYER_COUNT; spieler_count++) {
@@ -700,7 +716,6 @@ void planquadrat_t::halt_list_insert_at( halthandle_t halt, uint8 pos )
 void planquadrat_t::add_to_haltlist(halthandle_t halt)
 {
 	if(halt.is_bound()) {
-		unsigned insert_pos = 0;
 		// quick and dirty way to our 2d koodinates ...
 		const koord pos = get_kartenboden()->get_pos().get_2d();
 
@@ -709,7 +724,7 @@ void planquadrat_t::add_to_haltlist(halthandle_t halt)
 			// since only the first one gets all, we want the closest halt one to be first
 			halt_list_remove(halt);
 			const koord halt_next_pos = halt->get_next_pos(pos);
-			for(insert_pos=0;  insert_pos<halt_list_count;  insert_pos++) {
+			for(unsigned insert_pos=0;  insert_pos<halt_list_count;  insert_pos++) {
 
 				if(  koord_distance(halt_list[insert_pos]->get_next_pos(pos), pos) > koord_distance(halt_next_pos, pos)  ) {
 					halt_list_insert_at( halt, insert_pos );
@@ -726,7 +741,7 @@ void planquadrat_t::add_to_haltlist(halthandle_t halt)
 
 /**
  * removes the halt from a ground
- * however this funtion check, whether there is really no other part still reachable
+ * however this function check, whether there is really no other part still reachable
  * @author prissi, neroden
  */
 void planquadrat_t::remove_from_haltlist(halthandle_t halt)

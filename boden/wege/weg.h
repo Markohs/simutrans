@@ -70,6 +70,7 @@ public:
 	enum system_type {
 		type_flat     = 0,	///< flat track
 		type_elevated = 1,	///< flag for elevated ways
+		type_runway   = 1,	///< flag for runway (only aircrafts)
 		type_tram     = 7,	///< tram track (waytype = track_wt), hardcoded values everywhere ...
 		type_all      = 255
 	};
@@ -191,7 +192,7 @@ public:
 	virtual void info(cbuffer_t & buf) const;
 
 	/**
-	 * @return NULL wenn OK, ansonsten eine Fehlermeldung
+	 * @return NULL if OK, otherwise an error message
 	 * @author Hj. Malthaner
 	 */
 	virtual const char *ist_entfernbar(const spieler_t *sp);

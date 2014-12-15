@@ -124,11 +124,11 @@
  * @author Hj. Matthaner
  * this is speed * 1024 / 80 = speed * 64 / 5
  */
-#define kmh_to_speed(speed) (((speed) << 6) / 5)
+#define kmh_to_speed(speed) (((speed) << 6) / VEHICLE_SPEED_FACTOR)
 
 /*
  * Converts speed (yards per tick) into tiles per month
  */
 // Done in simworld.h: speed_to_tiles_per_month
 
-#endif /* simunits.h */
+#endif

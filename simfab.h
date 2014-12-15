@@ -66,12 +66,36 @@ class ware_t;
 
 
 // production happens in every second
-#define PRODUCTION_DELTA_T (1024)
+#define PRODUCTION_DELTA_T_BITS (10)
+#define PRODUCTION_DELTA_T (1 << PRODUCTION_DELTA_T_BITS)
 // default production factor
 #define DEFAULT_PRODUCTION_FACTOR_BITS (8)
 #define DEFAULT_PRODUCTION_FACTOR (1 << DEFAULT_PRODUCTION_FACTOR_BITS)
 // precision of apportioned demand (i.e. weights of factories at target cities)
 #define DEMAND_BITS (4)
+
+/**
+ * JIT2 output scale constants.
+ */
+// The fixed point precision of production scale factors.
+// Supported range 1 to 30.
+static const uint32 PRODUCTION_SCALE_BITS = 10;
+// The minimum allowed production rate for a factory. This is to limit the time outputs take to fill completly (so factories idle sooner).
+// Fixed point form range must be between 0.0 and 1.0.
+static const sint32 OUTPUT_SCALE_MINIMUM_FRACTION = (5 << PRODUCTION_SCALE_BITS) / 100; // ~5%, 1/20 of the full production rate.
+// The number of times minimum_shipment must be in current storage before rampdown starts.
+// Must be at least 2 to allow for full production.
+static const sint32 OUTPUT_SCALE_RAMPDOWN_MULTIPLYER = 2; // Two shipments must be ready.
+
+/**
+ * Shipment size constants.
+ */
+// The maximum shipment size in whole units.
+// Must be greater than 0.
+static const uint32 SHIPMENT_MAX_SIZE = 10; // Traditional value.
+// The minimum number of whole shipments a facotry can store.
+// Must be greater than 0 to prevent division by 0.
+static const uint32 SHIPMENT_NUM_MIN = 4; // Quarters should allow reasonably fair distribution.
 
 
 /**
@@ -81,7 +105,6 @@ sint64 convert_goods(sint64 value);
 sint64 convert_power(sint64 value);
 sint64 convert_boost(sint64 value);
 
-// to prepare for 64 precision ...
 class ware_production_t
 {
 private:
@@ -93,7 +116,7 @@ private:
 	/// clears statistics, transit, and weighted_sum_storage
 	void init_stats();
 public:
-	ware_production_t() : type(NULL), menge(0), max(0), transit(0), max_transit(0), index_offset(0)
+	ware_production_t() : type(NULL), menge(0), max(0)/*, transit(statistics[0][FAB_GOODS_TRANSIT])*/, max_transit(0), index_offset(0)
 	{
 #ifdef TRANSIT_DISTANCE
 		count_suppliers = 0;
@@ -105,7 +128,7 @@ public:
 	void set_typ(const ware_besch_t *t) { type=t; }
 
 	// Knightly : functions for manipulating goods statistics
-	void roll_stats(sint64 aggregate_weight);
+	void roll_stats(uint32 factor, sint64 aggregate_weight);
 	void rdwr(loadsave_t *file);
 	const sint64* get_stats() const { return *statistics; }
 	void book_stat(sint64 value, int stat_type) { assert(stat_type<MAX_FAB_GOODS_STAT); statistics[0][stat_type] += value; }
@@ -123,16 +146,34 @@ public:
 		}
 		return value;
 	}
-	void book_weighted_sum_storage(sint64 delta_time);
+	void book_weighted_sum_storage(uint32 factor, sint64 delta_time);
+
+	// Utility methods.
+	sint32 scale_production(sint32 prod);
 
 	sint32 menge;	// in internal units shifted by precision_bits (see step)
 	sint32 max;
-	sint32 transit;
-	sint32 max_transit;	// current limit, depending of suppliers mean distance
+	/// Cargo currently in transit from/to this slot. Equivalent to statistics[0][FAB_GOODS_TRANSIT].
+	sint32 get_in_transit() const { return (sint32)statistics[0][FAB_GOODS_TRANSIT]; }
+
+	/// Annonmyous union used to save memory and readability. Contains supply flow control limiters.
+	union{
+		// Classic : Current limit on cargo in transit (maximum network capacity), depending on sum of all supplier output storage.
+		sint32 max_transit;
+
+		// JIT Version 2 : Current demand for the good. Orders when greater than 0.
+		sint32 demand_buffer;
+
+		// The minimum shipment size. Used to control delivery to stops and for production ramp-down.
+		sint32 min_shipment;
+	};
+
+	// Ordering lasts at least 1 tick period to allow all suppliers time to send (fair). Used by inputs.
+	bool placing_orders;
+
 #ifdef TRANSIT_DISTANCE
 	sint32 count_suppliers;	// only needed for averaging
 #endif
-
 	uint32 index_offset; // used for haltlist and lieferziele searches in verteile_waren to produce round robin results
 };
 
@@ -166,6 +207,40 @@ private:
 	sint64 weighted_sum_boost_mail;
 	sint64 weighted_sum_power;
 	sint64 aggregate_weight;
+
+	// Control logic type determines how a factory behaves with regards to inputs and outputs.
+	enum CL_TYPE {
+		CL_NONE,         // This factory does nothing! (might be useful for scenarios)
+		// Producers are at the bottom of every supply chain.
+		CL_PROD_CLASSIC, // Classic producer logic.
+		CL_PROD_MANY,    // Producer of many outputs.
+		// Factories are in the middle of every supply chain.
+		CL_FACT_CLASSIC, // Classic factory logic, consume at maximum output rate or minimum input.
+		CL_FACT_MANY,    // Enhanced factory logic, consume at average of output rate or minimum input averaged.
+		// Consumers are at the top of every supply chain.
+		CL_CONS_CLASSIC, // Classic consumer logic. Can generate power.
+		CL_CONS_MANY,    // Consumer that consumes multiple inputs.
+		// Electricity producers provider power.
+		CL_ELEC_PROD,    // Simple electricity source. (green energy)
+		CL_ELEC_CLASSIC, // Classic electricity producer behaviour with no inputs.
+		CL_ELEC_CONS,    // Power produced based on input satisfaction.
+	} control_type;
+
+	// Demand buffer order logic;
+	enum DL_TYPE {
+		DL_NONE,    // Has no inputs to demand.
+		DL_SYNC,    // All inputs ordered together.
+		DL_ASYNC,   // All inputs ordered separatly.
+		DL_OLD      // Use maximum in-transit and storage to determine demand.
+	} demand_type;
+
+	// Boost logic determines what factors boost factory production.
+	enum BL_TYPE {
+		BL_NONE,    // Production cannot be boosted.
+		BL_PAXM,    // Production boosted only using passengers/mail.
+		BL_POWER,   // Production boosted with power as well. Needs aditional logic for correct ordering.
+		BL_CLASSIC, // Production boosted in classic way.
+	} boost_type;
 
 	// Knightly : Functions for manipulating factory statistics
 	void init_stats();
@@ -240,6 +315,13 @@ private:
 
 	array_tpl<ware_production_t> eingang; ///< array for input/consumed goods
 	array_tpl<ware_production_t> ausgang; ///< array for output/produced goods
+
+	/**
+	 * Some handy cached numbers for active inputs and outputs.
+	 */
+	uint8 inactive_outputs;
+	uint8 inactive_inputs;
+	uint8 inactive_demands;
 
 	/**
 	 * Zeitakkumulator für Produktion
@@ -393,8 +475,11 @@ public:
 	sint64 get_stat(int month, int stat_type) const { assert(stat_type<MAX_FAB_STAT); return statistics[month][stat_type]; }
 	void book_stat(sint64 value, int stat_type) { assert(stat_type<MAX_FAB_STAT); statistics[0][stat_type] += value; }
 
-
+	// This updates maximum in-transit. Important for loading.
 	static void update_transit( const ware_t *ware, bool add );
+
+	// This updates transit stats for freshly produced goods. Includes logic to decrement demand counters.
+	static void apply_transit( const ware_t *ware );
 
 	/**
 	 * convert internal units to displayed values
@@ -486,7 +571,7 @@ public:
 	// true, if there was production requiring power in the last step
 	bool is_currently_producing() const { return currently_producing; }
 
-	// used to limit transformers to 1 per factory
+	// used to limit transformers to 1 per factory and for controling power bonus.
 	bool is_transformer_connected() const { return transformer_connected; }
 	void set_transformer_connected(bool connected) { transformer_connected = connected; }
 
@@ -499,7 +584,7 @@ public:
 
 	sint32 liefere_an(const ware_besch_t *, sint32 menge);
 
-	void step(long delta_t);                  // fabrik muss auch arbeiten
+	void step(uint32 delta_t);                  // fabrik muss auch arbeiten
 	void neuer_monat();
 
 	char const* get_name() const;

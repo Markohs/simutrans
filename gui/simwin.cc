@@ -153,7 +153,7 @@ static void *inside_event_handling = NULL;
 // only this gui element can set a tooltip
 static void *tooltip_element = NULL;
 
-static void destroy_framed_win(simwin_t *win);
+static bool destroy_framed_win(simwin_t *win);
 
 //=========================================================================
 // Helper Functions
@@ -181,7 +181,7 @@ static int display_gadget_box(sint8 code,
 	}
 
 	if(pushed) {
-		display_fillbox_wh_clip(x+1, y+1, D_GADGET_WIDTH-2, D_TITLEBAR_HEIGHT-2, (color & 0xF8) + max(7, (color&0x07)+2), false);
+		display_fillbox_wh_clip(x+1, y+1, D_GADGET_WIDTH-2, D_TITLEBAR_HEIGHT-2, (color & 0xF8) + max(7, (color&0x07)+2), false );
 	}
 
 	// Do we have a gadget image?
@@ -414,7 +414,7 @@ gui_frame_t *win_get_top()
  * returns the focused component of the top window
  * @author Knightly
  */
-gui_komponente_t *win_get_focus()
+gui_component_t *win_get_focus()
 {
 	return wins.empty() ? 0 : wins.back().gui->get_focus();
 }
@@ -438,6 +438,7 @@ bool top_win( const gui_frame_t *gui, bool keep_rollup )
 	// not open
 	return false;
 }
+
 
 /**
  * Checks if a window is a top level window
@@ -542,7 +543,6 @@ void rdwr_all_win(loadsave_t *file)
 		}
 	}
 }
-
 
 
 int create_win(gui_frame_t* const gui, wintype const wt, ptrdiff_t const magic)
@@ -701,13 +701,16 @@ static void process_kill_list()
  * Destroy a framed window
  * @author Hj. Malthaner
  */
-static void destroy_framed_win(simwin_t *wins)
+static bool destroy_framed_win(simwin_t *wins)
 {
+	bool r = true;
+
 	// mark dirty
 	const scr_size size = wins->gui->get_windowsize();
 	mark_rect_dirty_wc( wins->pos.x - 1, wins->pos.y - 1, wins->pos.x + size.w + 2, wins->pos.y + size.h + 2 ); // -1, +2 for env_t::window_frame_active
 
-	if(wins->gui) {
+	gui_frame_t* gui = wins->gui; // save pointer to gui window: might be modified in event handling, or could be modified if wins points to value in kill_list and kill_list is modified! nasty surprise
+	if(  gui  ) {
 		event_t ev;
 
 		ev.ev_class = INFOWIN;
@@ -719,32 +722,34 @@ static void destroy_framed_win(simwin_t *wins)
 		ev.button_state = 0;
 
 		void *old = inside_event_handling;
-		inside_event_handling = wins->gui;
+		inside_event_handling = gui;
 		wins->gui->infowin_event(&ev);
 		inside_event_handling = old;
 	}
 
-	if(  (wins->wt&w_do_not_delete)==0  ) {
-
-		// save pointer to gui window:
-		// could be modified if wins points to value in kill_list and kill_list is modified! nasty surprise
-		gui_frame_t* gui = wins->gui;
-		// remove from kill list first
-		// otherwise delete will be called again on that window
-		for(  uint j = 0;  j < kill_list.get_count();  j++  ) {
-			if(  kill_list[j].gui == gui  ) {
-				kill_list.remove_at(j);
-				break;
+	if(  (wins->wt&w_do_not_delete) == 0  ) {
+		if(  wins->gui == gui  ) {
+			// remove from kill list first, otherwise delete will be called again on that window
+			for(  uint32 j = 0;  j < kill_list.get_count();  j++  ) {
+				if(  kill_list[j].gui == gui  ) {
+					kill_list.remove_at(j);
+					break;
+				}
 			}
+			delete gui;
 		}
-		delete gui;
+		else {
+			// wins likely modified during event handling. Assume this was just a schedule window destroying itself, and top_win() therefore modifying wins.
+			// return false to signal destroy_all_win() that wins was already modified.
+			r = false;
+		}
 	}
 	// set dirty flag to refill background
-	if(wl) {
+	if(  wl  ) {
 		wl->set_background_dirty();
 	}
+	return r;
 }
-
 
 
 bool destroy_win(const ptrdiff_t magic)
@@ -755,7 +760,6 @@ bool destroy_win(const ptrdiff_t magic)
 	}
 	return false;
 }
-
 
 
 bool destroy_win(const gui_frame_t *gui)
@@ -793,21 +797,25 @@ bool destroy_win(const gui_frame_t *gui)
 }
 
 
-
 void destroy_all_win(bool destroy_sticky)
 {
-	for ( int curWin=0 ; curWin < (int)wins.get_count() ; curWin++ ) {
-		if(  destroy_sticky  || !wins[curWin].sticky  ) {
-			if(  inside_event_handling==wins[curWin].gui  ) {
+	for(  sint32 curWin = 0;  curWin < (sint32)wins.get_count();  curWin++  ) {
+		if(  destroy_sticky  ||  !wins[curWin].sticky  ) {
+			if(  inside_event_handling == wins[curWin].gui  ) {
 				// only add this, if not already added
 				kill_list.append_unique(wins[curWin]);
+				// compact the window list
+				wins.remove_at(curWin);
+				curWin--;
 			}
 			else {
-				destroy_framed_win(&wins[curWin]);
+				if(  destroy_framed_win(&wins[curWin])  ) {
+					// compact the window list
+					wins.remove_at(curWin);
+					curWin--;
+				}
+				// else wins was already modified - assume by the schedule window closing itself during event handling
 			}
-			// compact the window list
-			wins.remove_at(curWin);
-			curWin--;
 		}
 	}
 }
@@ -821,6 +829,7 @@ int top_win(int win, bool keep_state )
 
 	// mark old dirty
 	scr_size size = wins.back().gui->get_windowsize();
+	mark_rect_dirty_wc( wins.back().pos.x - 1, wins.back().pos.y - 1, wins.back().pos.x + size.w + 2, wins.back().pos.y + size.h + 2 ); // -1, +2 for env_t::window_frame_active
 	wins.back().dirty = true;
 
 	simwin_t tmp = wins[win];
@@ -856,33 +865,34 @@ int top_win(int win, bool keep_state )
 void display_win(int win)
 {
 	// ok, now process it
-	gui_frame_t *komp = wins[win].gui;
-	scr_size size = komp->get_windowsize();
+	gui_frame_t *comp = wins[win].gui;
+	scr_size size = comp->get_windowsize();
 	scr_coord pos = wins[win].pos;
-	PLAYER_COLOR_VAL title_color = (komp->get_titelcolor()&0xF8)+env_t::front_window_bar_color;
+	PLAYER_COLOR_VAL title_color = (comp->get_titelcolor()&0xF8)+env_t::front_window_bar_color;
 	PLAYER_COLOR_VAL text_color = +env_t::front_window_text_color;
 	if(  (unsigned)win!=wins.get_count()-1  ) {
 		// not top => maximum brightness
 		title_color = (title_color&0xF8)+env_t::bottom_window_bar_color;
 		text_color = env_t::bottom_window_text_color;
 	}
-	bool need_dragger = komp->get_resizemode() != gui_frame_t::no_resize;
+	bool need_dragger = comp->get_resizemode() != gui_frame_t::no_resize;
 
 	// %HACK (Mathew Hounsell) So draw will know if gadget is needed.
-	wins[win].flags.help = ( komp->get_hilfe_datei() != NULL );
+	wins[win].flags.help = ( comp->get_hilfe_datei() != NULL );
 	if(  wins[win].flags.title  ) {
 		win_draw_window_title(wins[win].pos,
 				size,
 				title_color,
-				komp->get_name(),
+				comp->get_name(),
 				text_color,
-				komp->get_weltpos(false),
+				comp->get_weltpos(false),
 				wins[win].gadget_state,
 				wins[win].sticky,
-				komp->is_weltpos(),
+				comp->is_weltpos(),
 				wins[win].flags );
 	}
 	if(  wins[win].dirty  ) {
+		// not sure this is still a useful call
 		mark_rect_dirty_wc( wins[win].pos.x, wins[win].pos.y, wins[win].pos.x+size.w+1, wins[win].pos.y+2 );
 		wins[win].dirty = false;
 	}
@@ -890,14 +900,14 @@ void display_win(int win)
 	if(env_t::window_frame_active  &&  (unsigned)win==wins.get_count()-1) {
 		const int y_off = wins[win].flags.title ? 0 : D_TITLEBAR_HEIGHT;
 		if(!wins[win].rollup) {
-			display_ddd_box( wins[win].pos.x-1, wins[win].pos.y-1 + y_off, size.w+2, size.h+2 - y_off, title_color, title_color+1, wins[win].gui->is_dirty() );
+			display_ddd_box( wins[win].pos.x-1, wins[win].pos.y-1 + y_off, size.w+2, size.h+2 - y_off, title_color, title_color+1, wins[win].dirty | wins[win].gui->is_dirty() );
 		}
 		else {
-			display_ddd_box( wins[win].pos.x-1, wins[win].pos.y-1 + y_off, size.w+2, D_TITLEBAR_HEIGHT + 2 - y_off, title_color, title_color+1, wins[win].gui->is_dirty() );
+			display_ddd_box( wins[win].pos.x-1, wins[win].pos.y-1 + y_off, size.w+2, D_TITLEBAR_HEIGHT + 2 - y_off, title_color, title_color+1, wins[win].dirty | wins[win].gui->is_dirty() );
 		}
 	}
 	if(!wins[win].rollup) {
-		komp->draw(wins[win].pos, size);
+		comp->draw(wins[win].pos, size);
 
 		// draw dragger
 		if(need_dragger) {
@@ -1463,7 +1473,28 @@ void win_display_flush(double konto)
 	// display main menu
 	werkzeug_waehler_t *main_menu = werkzeug_t::toolbar_tool[0]->get_werkzeug_waehler();
 	display_set_clip_wh( 0, 0, disp_width, menu_height+1 );
-	display_fillbox_wh( 0, 0, disp_width, menu_height, MN_GREY2, false );
+	if(  skinverwaltung_t::werkzeuge_background  &&  skinverwaltung_t::werkzeuge_background->get_bild_nr(0) != IMG_LEER  ) {
+		const image_id back_img = skinverwaltung_t::werkzeuge_background->get_bild_nr(0);
+		scr_coord_val w = env_t::iconsize.w;
+		scr_rect row = scr_rect( 0, 0, disp_width, menu_height );
+		display_fit_img_to_width( back_img, w );
+		// tile it wide
+		while(  w <= row.w  ) {
+			display_color_img( back_img, row.x, row.y, 0, false, true );
+			row.x += w;
+			row.w -= w;
+		}
+		// for the rest we have to clip the rectangle
+		if(  row.w > 0  ) {
+			clip_dimension const cl = display_get_clip_wh();
+			display_set_clip_wh( cl.x, cl.y, max(0, min(row.get_right(), cl.xx) - cl.x), cl.h );
+			display_color_img( back_img, row.x, row.y, 0, false, true );
+			display_set_clip_wh( cl.x, cl.y, cl.w, cl.h );
+		}
+	}
+	else {
+		display_fillbox_wh( 0, 0, disp_width, menu_height, MN_GREY2, false );
+	}
 	// .. extra logic to enable tooltips
 	tooltip_element = menu_height > get_maus_y() ? main_menu : NULL;
 	void *old_inside_event_handling = inside_event_handling;
@@ -1537,10 +1568,10 @@ void win_display_flush(double konto)
 
 	char const *time = tick_to_string( wl->get_zeit_ms(), true );
 
-	// bottom text background
+	// statusbar background
 	display_set_clip_wh( 0, 0, disp_width, disp_height );
-	display_fillbox_wh(0, disp_height-16, disp_width, 1, MN_GREY4, false);
-	display_fillbox_wh(0, disp_height-15, disp_width, 15, MN_GREY1, false);
+	display_fillbox_wh(0, disp_height-16, disp_width, 1, SYSCOL_STATUSBAR_DIVIDER, false);
+	display_fillbox_wh(0, disp_height-15, disp_width, 15, SYSCOL_STATUSBAR_BACKGROUND, false);
 
 	bool tooltip_check = get_maus_y()>disp_height-15;
 	if(  tooltip_check  ) {
@@ -1634,8 +1665,8 @@ void win_display_flush(double konto)
 	}
 #endif
 
-	scr_coord_val w_left = 20+display_proportional(20, disp_height-12, time, ALIGN_LEFT, COL_BLACK, true);
-	scr_coord_val w_right  = display_proportional(right_border-4, disp_height-12, info, ALIGN_RIGHT, COL_BLACK, true);
+	scr_coord_val w_left = 20+display_proportional(20, disp_height-12, time, ALIGN_LEFT, SYSCOL_STATUSBAR_TEXT, true);
+	scr_coord_val w_right  = display_proportional(right_border-4, disp_height-12, info, ALIGN_RIGHT, SYSCOL_STATUSBAR_TEXT, true);
 	scr_coord_val middle = (disp_width+((w_left+8)&0xFFF0)-((w_right+8)&0xFFF0))/2;
 
 	if(wl->get_active_player()) {
@@ -1722,7 +1753,6 @@ void win_set_tooltip(int xpos, int ypos, const char *text, const void *const own
 	tooltip_xpos = xpos;
 	tooltip_ypos = ypos;
 }
-
 
 
 /**

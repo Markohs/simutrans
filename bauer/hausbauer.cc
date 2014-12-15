@@ -60,7 +60,7 @@ vector_tpl<const haus_besch_t *> hausbauer_t::station_building;
 vector_tpl<const haus_besch_t *> hausbauer_t::headquarter;
 
 /// special objects directly needed by the program
-static spezial_obj_tpl<haus_besch_t> spezial_objekte[] = {
+static spezial_obj_tpl<haus_besch_t> const spezial_objekte[] = {
 	{ &hausbauer_t::elevated_foundation_besch,   "MonorailGround" },
 	{ NULL, NULL }
 };
@@ -194,7 +194,7 @@ bool hausbauer_t::alles_geladen()
 	}
 
 	// now sort them according level
-	warne_ungeladene(spezial_objekte, 1);
+	warne_ungeladene(spezial_objekte);
 	return true;
 }
 
@@ -304,8 +304,8 @@ void hausbauer_t::remove( spieler_t *sp, gebaeude_t *gb )
 	koord size = tile->get_besch()->get_groesse( layout );
 	koord k;
 
-	if(tile->get_besch()->get_utyp()==haus_besch_t::firmensitz) {
-		gb->get_besitzer()->add_headquarter( tile->get_besch()->get_extra(), koord::invalid );
+	if(  tile->get_besch()->get_utyp() == haus_besch_t::firmensitz  ) {
+		gb->get_besitzer()->add_headquarter( 0, koord::invalid );
 	}
 	if(tile->get_besch()->get_utyp()==haus_besch_t::denkmal) {
 		ungebaute_denkmaeler.append_unique(tile->get_besch());
@@ -565,6 +565,12 @@ gebaeude_t *hausbauer_t::neues_gebaeude(spieler_t *sp, koord3d pos, int built_la
 			if(gr_tmp && gr_tmp->get_weg_yoff()/TILE_HEIGHT_STEP == 1) {
 				gr = gr_tmp;
 			}
+			else {
+				gr_tmp = welt->lookup( pos+koord3d( (layout & 1 ? koord::ost : koord::sued),offset - 1) );
+				if(gr_tmp && gr_tmp->get_weg_yoff()/TILE_HEIGHT_STEP == 1) {
+					gr = gr_tmp;
+				}
+			}
 		}
 
 		if(gr) {
@@ -600,9 +606,15 @@ gebaeude_t *hausbauer_t::neues_gebaeude(spieler_t *sp, koord3d pos, int built_la
 		gr = welt->lookup( pos+koord3d( (layout & 1 ? koord::west : koord::nord), offset) );
 		if(!gr) {
 			// check whether bridge end tile
-			grund_t * gr_tmp = welt->lookup( pos+koord3d( (layout & 1 ? koord::west : koord::nord),offset - 1) );
+			grund_t * gr_tmp = welt->lookup( pos+koord3d( (layout & 1 ? koord::ost : koord::sued),offset - 1) );
 			if(gr_tmp && gr_tmp->get_weg_yoff()/TILE_HEIGHT_STEP == 1) {
 				gr = gr_tmp;
+			}
+			else {
+				gr_tmp = welt->lookup( pos+koord3d( (layout & 1 ? koord::ost : koord::sued),offset - 1) );
+				if(gr_tmp && gr_tmp->get_weg_yoff()/TILE_HEIGHT_STEP == 1) {
+					gr = gr_tmp;
+				}
 			}
 		}
 		if(gr) {
@@ -906,10 +918,15 @@ const vector_tpl<const haus_besch_t*>* hausbauer_t::get_list(const haus_besch_t:
 	switch (typ) {
 		case haus_besch_t::denkmal:         return &ungebaute_denkmaeler;
 		case haus_besch_t::attraction_land: return &sehenswuerdigkeiten_land;
-		case haus_besch_t::firmensitz:      return NULL;
+		case haus_besch_t::firmensitz:      return &headquarter;
 		case haus_besch_t::rathaus:         return &rathaeuser;
 		case haus_besch_t::attraction_city: return &sehenswuerdigkeiten_city;
-		case haus_besch_t::fabrik:          return NULL;
+		case haus_besch_t::hafen:
+		case haus_besch_t::hafen_geb:
+		case haus_besch_t::depot:
+		case haus_besch_t::generic_stop:
+		case haus_besch_t::generic_extension:
+		                                    return &station_building;
 		default:                            return NULL;
 	}
 }

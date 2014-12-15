@@ -37,7 +37,7 @@ static sint32 categories[MAX_MESG_TABS] =
 	(1 << message_t::general) | (1 << message_t::new_vehicle)
 };
 
-static const char *tab_strings[]=
+static char const* const tab_strings[]=
 {
 	"Chat_msg",
 	"Scenario_msg",
@@ -78,11 +78,11 @@ message_frame_t::message_frame_t() :
 		tab_categories.append( categories[i] );
 	}
 	tabs.add_listener(this);
-	add_komponente(&tabs);
+	add_component(&tabs);
 
 	option_bt.init(button_t::roundbox, translator::translate("Optionen"), scr_coord(BUTTON1_X,0), scr_size(D_BUTTON_WIDTH,D_BUTTON_HEIGHT));
 	option_bt.add_listener(this);
-	add_komponente(&option_bt);
+	add_component(&option_bt);
 
 	ibuf[0] = 0;
 	input.set_text(ibuf, lengthof(ibuf) );
@@ -90,12 +90,12 @@ message_frame_t::message_frame_t() :
 	input.set_pos(scr_coord(BUTTON2_X,0));
 	if(  env_t::networkmode  ) {
 		set_transparent( env_t::chat_window_transparency, COL_WHITE );
-		add_komponente(&input);
+		add_component(&input);
 		set_focus( &input );
 	}
 
-	set_windowsize(scr_size(D_DEFAULT_WIDTH, D_TITLEBAR_HEIGHT+D_BUTTON_HEIGHT+TAB_HEADER_V_SIZE+2+16*(LINESPACE+1)+D_SCROLLBAR_HEIGHT));
-	set_min_windowsize(scr_size(BUTTON3_X, D_TITLEBAR_HEIGHT+D_BUTTON_HEIGHT+TAB_HEADER_V_SIZE+2+3*(LINESPACE+1)+D_SCROLLBAR_HEIGHT));
+	set_windowsize(scr_size(D_DEFAULT_WIDTH, D_TITLEBAR_HEIGHT+D_BUTTON_HEIGHT+D_TAB_HEADER_HEIGHT+2+16*(LINESPACE+1)+D_SCROLLBAR_HEIGHT));
+	set_min_windowsize(scr_size(BUTTON3_X, D_TITLEBAR_HEIGHT+D_BUTTON_HEIGHT+D_TAB_HEADER_HEIGHT+2+3*(LINESPACE+1)+D_SCROLLBAR_HEIGHT));
 
 	set_resizemode(diagonal_resize);
 	resize(scr_coord(0,0));

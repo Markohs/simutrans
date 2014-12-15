@@ -17,7 +17,7 @@ class fabrik_t;
 class stadt_t;
 
 /**
- * Asynchron oder synchron animierte Gebaeude für Simutrans.
+ * Asynchronous or synchronous animations for buildings.
  * @author Hj. Malthaner
  */
 class gebaeude_t : public obj_t, sync_steppable
@@ -165,7 +165,7 @@ public:
 	 * @return true
 	 * @author Hj. Malthaner
 	 */
-	bool sync_step(long delta_t);
+	bool sync_step(uint32 delta_t);
 
 	/**
 	 * @return Den level (die Ausbaustufe) des Gebaudes

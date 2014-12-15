@@ -28,7 +28,7 @@ ware_besch_t *warenbauer_t::load_passagiere = NULL;
 ware_besch_t *warenbauer_t::load_post = NULL;
 ware_besch_t *warenbauer_t::load_nichts = NULL;
 
-static spezial_obj_tpl<ware_besch_t> spezial_objekte[] = {
+static spezial_obj_tpl<ware_besch_t> const spezial_objekte[] = {
 	{ &warenbauer_t::passagiere,    "Passagiere" },
 	{ &warenbauer_t::post,	    "Post" },
 	{ &warenbauer_t::nichts,	    "None" },
@@ -153,6 +153,11 @@ const ware_besch_t *warenbauer_t::get_info(const char* name)
 	const ware_besch_t *ware = besch_names.get(name);
 	if(  ware==NULL  ) {
 		ware = besch_names.get(translator::compatibility_name(name));
+	}
+	if(  ware == NULL  ) {
+		// to avoid crashed with NULL pointer in skripts return good NONE
+		dbg->error( "warenbauer_t::get_info()", "No besch for %s", name );
+		ware = warenbauer_t::nichts;
 	}
 	return ware;
 }

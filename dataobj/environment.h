@@ -35,6 +35,8 @@ public:
 	/// name of the directory to the pak-set
 	static std::string objfilename;
 
+	/// this the the preferred GUI theme at startup
+	static plainstring default_theme;
 
 	/**
 	 * @name Network-related settings
@@ -72,6 +74,9 @@ public:
 	static sint32 server_announce_interval;
 
 	static uint8 chat_window_transparency;
+
+	/// if true a kill event will save the  game under recovery#portnr#.sve
+	static bool server_save_game_on_quit;
 
 	/// @} end of Network-related settings
 
@@ -224,6 +229,9 @@ public:
 	/// use transparency to hide buildings and trees
 	static bool hide_with_transparency;
 
+	/// which is the deafult economy?
+	static uint8 just_in_time;
+
 	/// Three states to control hiding of building
 	enum hide_buildings_states {
 		NOT_HIDE=0,           ///< show all buildings
@@ -246,10 +254,8 @@ public:
 	/// buildings and trees near mouse cursor will be hidden.
 	static bool hide_under_cursor;
 
-
 	/// Hide buildings and trees within range of mouse cursor
 	static uint16 cursor_hide_range;
-
 
 	/// color used for cursor overlay blending
 	static uint8 cursor_overlay_color;
@@ -276,11 +282,11 @@ public:
 	/// time per water animation frame (0=off)
 	static uint32 water_animation;
 
-
 	/// how many internal pixel per height step (default 16)
 	static sint8 pak_tile_height_step;
 
 	/// new height for old slopes after conversion - 1=single height, 2=double height
+	/// Only use during loading of old games!
 	static sint8 pak_height_conversion_factor;
 
 	/// use the faster drawing routine (and allow for clipping errors)
@@ -351,6 +357,9 @@ public:
 	/// maximum length of city connections
 	static sint32 intercity_road_length;
 
+	// AI construction speed for new games (default 8000)
+	static uint32 default_ai_construction_speed;
+
 	/**
 	 * Name of rivers; first the river with the lowest number
 	 * @author prissi
@@ -385,6 +394,10 @@ public:
 
 	/// @}
 
+
+	/// if true this will show a softkeyboard only when editing text
+	/// default is off
+	static bool hide_keyboard;
 
 	/// default settings
 	/// read in simmain.cc from various tab files

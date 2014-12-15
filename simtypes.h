@@ -15,9 +15,6 @@
 #
 #	include <malloc.h>
 #	define ALLOCA(type, name, count) type* name = static_cast<type*>(alloca(sizeof(type) * (count)))
-#
-# define inline _inline
-#
 #elif defined __clang__
 #	include <stdlib.h>
 #	define ALLOCA(type, name, count) type* name = static_cast<type*>(alloca(sizeof(type) * (count)))
@@ -52,16 +49,12 @@
 #	define OVERRIDE
 #endif
 
-#ifdef __cplusplus
-#	define ENUM_BITSET(T) \
-		static inline T operator ~  (T  a)      { return     (T)~(unsigned)a;                } \
-		static inline T operator &  (T  a, T b) { return     (T)((unsigned)a & (unsigned)b); } \
-		static inline T operator &= (T& a, T b) { return a = (T)((unsigned)a & (unsigned)b); } \
-		static inline T operator |  (T  a, T b) { return     (T)((unsigned)a | (unsigned)b); } \
-		static inline T operator |= (T& a, T b) { return a = (T)((unsigned)a | (unsigned)b); }
-#else
-#	define ENUM_BITSET(T)
-#endif
+#define ENUM_BITSET(T) \
+	static inline T operator ~  (T  a)      { return     (T)~(unsigned)a;                } \
+	static inline T operator &  (T  a, T b) { return     (T)((unsigned)a & (unsigned)b); } \
+	static inline T operator &= (T& a, T b) { return a = (T)((unsigned)a & (unsigned)b); } \
+	static inline T operator |  (T  a, T b) { return     (T)((unsigned)a | (unsigned)b); } \
+	static inline T operator |= (T& a, T b) { return a = (T)((unsigned)a | (unsigned)b); }
 
 /* divers enums:
  * better defined here than scattered in thousand files ...
@@ -150,8 +143,6 @@ typedef unsigned long long  uint64;
 #	define NORETURN      __attribute__ ((noreturn))
 #endif
 
-#ifdef __cplusplus
-
 template<typename T> static inline int sgn(T x)
 {
 		if (x < 0) return -1;
@@ -182,8 +173,8 @@ static inline uint16 endian(uint16 v)
 static inline uint32 endian(uint32 v)
 {
 #ifdef SIM_BIG_ENDIAN
-	v = v << 16              | v >> 16;              // 0x22330011
-	v = v <<  8 & 0xFF00FF00 | v >>  8 & 0x00FF00FF; // 0x33221100
+	v = (v << 16)              | (v >> 16);              // 0x22330011
+	v = (v <<  8) & 0xFF00FF00 | (v >>  8) & 0x00FF00FF; // 0x33221100
 #endif
 	return v;
 }
@@ -191,9 +182,9 @@ static inline uint32 endian(uint32 v)
 static inline uint64 endian(uint64 v)
 {
 #ifdef SIM_BIG_ENDIAN
-	v = v << 32                         | v >> 32;                         // 0x4455667700112233
-	v = v << 16 & 0xFFFF0000FFFF0000ULL | v >> 16 & 0x0000FFFF0000FFFFULL; // 0x6677445522330011
-	v = v <<  8 & 0xFF00FF00FF00FF00ULL | v >>  8 & 0x00FF00FF00FF00FFULL; // 0x7766554433221100
+	v = (v << 32)                         | (v >> 32);                         // 0x4455667700112233
+	v = (v << 16) & 0xFFFF0000FFFF0000ULL | (v >> 16) & 0x0000FFFF0000FFFFULL; // 0x6677445522330011
+	v = (v <<  8) & 0xFF00FF00FF00FF00ULL | (v >>  8) & 0x00FF00FF00FF00FFULL; // 0x7766554433221100
 #endif
 	return v;
 }
@@ -220,10 +211,5 @@ union value_t
 	const void* p;
 	long i;
 };
-
-#else
-// c definitionen
-typedef enum bool { false, true } bool;
-#endif
 
 #endif

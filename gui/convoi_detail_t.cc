@@ -19,6 +19,7 @@
 #include "../simcolor.h"
 #include "../display/simgraph.h"
 #include "../simworld.h"
+#include "../simware.h"
 #include "../gui/simwin.h"
 
 #include "../dataobj/fahrplan.h"
@@ -50,16 +51,16 @@ convoi_detail_t::convoi_detail_t(convoihandle_t cnv)
 	sale_button.init(button_t::roundbox, "Verkauf", scr_coord(BUTTON4_X, 0), scr_size(D_BUTTON_WIDTH,D_BUTTON_HEIGHT));
 	sale_button.set_tooltip("Remove vehicle from map. Use with care!");
 	sale_button.add_listener(this);
-	add_komponente(&sale_button);
+	add_component(&sale_button);
 
 	withdraw_button.init(button_t::roundbox, "withdraw", scr_coord(BUTTON3_X, 0), scr_size(D_BUTTON_WIDTH, D_BUTTON_HEIGHT));
 	withdraw_button.set_tooltip("Convoi is sold when all wagons are empty.");
 	withdraw_button.add_listener(this);
-	add_komponente(&withdraw_button);
+	add_component(&withdraw_button);
 
 	scrolly.set_pos(scr_coord(0, 2+16+5*LINESPACE));
 	scrolly.set_show_scroll_x(true);
-	add_komponente(&scrolly);
+	add_component(&scrolly);
 
 	set_windowsize(scr_size(D_DEFAULT_WIDTH, D_TITLEBAR_HEIGHT+50+17*(LINESPACE+1)+D_SCROLLBAR_HEIGHT-6));
 	set_min_windowsize(scr_size(D_DEFAULT_WIDTH, D_TITLEBAR_HEIGHT+50+3*(LINESPACE+1)+D_SCROLLBAR_HEIGHT-3));
@@ -95,18 +96,18 @@ void convoi_detail_t::draw(scr_coord pos, scr_size size)
 
 		// current power
 		buf.printf( translator::translate("Leistung: %d kW"), cnv->get_sum_leistung() );
-		display_proportional_clip( pos.x+10, offset_y, buf, ALIGN_LEFT, COL_BLACK, true );
+		display_proportional_clip( pos.x+10, offset_y, buf, ALIGN_LEFT, SYSCOL_TEXT, true );
 		offset_y += LINESPACE;
 
 		number_to_string( number, (double)cnv->get_total_distance_traveled(), 0 );
 		buf.clear();
 		buf.printf( translator::translate("Odometer: %s km"), number );
-		display_proportional_clip( pos.x+10, offset_y, buf, ALIGN_LEFT, COL_BLACK, true );
+		display_proportional_clip( pos.x+10, offset_y, buf, ALIGN_LEFT, SYSCOL_TEXT, true );
 		offset_y += LINESPACE;
 
 		buf.clear();
 		buf.printf("%s %i", translator::translate("Station tiles:"), cnv->get_tile_length() );
-		display_proportional_clip( pos.x+10, offset_y, buf, ALIGN_LEFT, COL_BLACK, true );
+		display_proportional_clip( pos.x+10, offset_y, buf, ALIGN_LEFT, SYSCOL_TEXT, true );
 		offset_y += LINESPACE;
 
 		money_to_string( number, cnv->calc_restwert() / 100.0 );
@@ -117,7 +118,7 @@ void convoi_detail_t::draw(scr_coord pos, scr_size size)
 
 		buf.clear();
 		buf.printf(translator::translate("Bonusspeed: %i km/h"), cnv->get_speedbonus_kmh() );
-		display_proportional_clip( pos.x+10, offset_y, buf, ALIGN_LEFT, COL_BLACK, true );
+		display_proportional_clip( pos.x+10, offset_y, buf, ALIGN_LEFT, SYSCOL_TEXT, true );
 		offset_y += LINESPACE;
 	}
 }
@@ -235,9 +236,7 @@ void gui_vehicleinfo_t::draw(scr_coord offset)
 		cbuffer_t buf;
 
 		// for bonus stuff
-		const sint32 ref_kmh = welt->get_average_speed( cnv->front()->get_waytype() );
 		const sint32 cnv_kmh = (cnv->front()->get_waytype() == air_wt) ? speed_to_kmh(cnv->get_min_top_speed()) : cnv->get_speedbonus_kmh();
-		const sint32 kmh_base = (100 * cnv_kmh) / ref_kmh - 100;
 
 		static cbuffer_t freight_info;
 		for(unsigned veh=0;  veh<cnv->get_vehikel_anzahl(); veh++ ) {
@@ -256,7 +255,7 @@ void gui_vehicleinfo_t::draw(scr_coord offset)
 			int extra_y=0;
 
 			// name of this
-			display_proportional_clip( pos.x+w+offset.x, pos.y+offset.y+total_height+extra_y, translator::translate(v->get_besch()->get_name()), ALIGN_LEFT, COL_BLACK, true );
+			display_proportional_clip( pos.x+w+offset.x, pos.y+offset.y+total_height+extra_y, translator::translate(v->get_besch()->get_name()), ALIGN_LEFT, SYSCOL_TEXT, true );
 			extra_y += LINESPACE;
 
 			// age
@@ -265,7 +264,7 @@ void gui_vehicleinfo_t::draw(scr_coord offset)
 				const sint32 month = v->get_insta_zeit();
 				buf.printf( "%s %s %i", translator::translate("Manufactured:"), translator::get_month_name(month%12), month/12 );
 			}
-			display_proportional_clip( pos.x+w+offset.x, pos.y+offset.y+total_height+extra_y, buf, ALIGN_LEFT, COL_BLACK, true );
+			display_proportional_clip( pos.x+w+offset.x, pos.y+offset.y+total_height+extra_y, buf, ALIGN_LEFT, SYSCOL_TEXT, true );
 			extra_y += LINESPACE;
 
 			// value
@@ -292,17 +291,15 @@ void gui_vehicleinfo_t::draw(scr_coord offset)
 			if(v->get_fracht_max() > 0) {
 
 				// bonus stuff
-				int len = 5+display_proportional_clip( pos.x+w+offset.x, pos.y+offset.y+total_height+extra_y, translator::translate("Max income:"), ALIGN_LEFT, COL_BLACK, true );
-				const sint32 grundwert128 = v->get_fracht_typ()->get_preis() * welt->get_settings().get_bonus_basefactor();	// bonus price will be always at least this
-				const sint32 grundwert_bonus = v->get_fracht_typ()->get_preis()*(1000l+kmh_base*v->get_fracht_typ()->get_speed_bonus());
-				const sint32 price = (v->get_fracht_max()*(grundwert128>grundwert_bonus ? grundwert128 : grundwert_bonus))/3000 - v->get_betriebskosten();
+				int len = 5+display_proportional_clip( pos.x+w+offset.x, pos.y+offset.y+total_height+extra_y, translator::translate("Max income:"), ALIGN_LEFT, SYSCOL_TEXT, true );
+				const sint32 price = (v->get_fracht_max()* ware_t::calc_revenue(v->get_fracht_typ(), cnv->front()->get_waytype(), cnv_kmh) )/3000 - v->get_betriebskosten();
 				money_to_string( number, price/100.0 );
 				display_proportional_clip( pos.x+w+offset.x+len, pos.y+offset.y+total_height+extra_y, number, ALIGN_LEFT, price>0?MONEY_PLUS:MONEY_MINUS, true );
 				extra_y += LINESPACE;
 
 				if(  sint64 cost = welt->scale_with_month_length(v->get_besch()->get_maintenance())  ) {
-					KOORD_VAL len = display_proportional_clip( pos.x+w+offset.x, pos.y+offset.y+total_height+extra_y, translator::translate("Maintenance"), ALIGN_LEFT, COL_BLACK, true );
-					len += display_proportional_clip( pos.x+w+offset.x+len, pos.y+offset.y+total_height+extra_y, ": ", ALIGN_LEFT, COL_BLACK, true );
+					KOORD_VAL len = display_proportional_clip( pos.x+w+offset.x, pos.y+offset.y+total_height+extra_y, translator::translate("Maintenance"), ALIGN_LEFT, SYSCOL_TEXT, true );
+					len += display_proportional_clip( pos.x+w+offset.x+len, pos.y+offset.y+total_height+extra_y, ": ", ALIGN_LEFT, SYSCOL_TEXT, true );
 					money_to_string( number, cost/(100.0) );
 					display_proportional_clip( pos.x+w+offset.x+len, pos.y+offset.y+total_height+extra_y, number, ALIGN_LEFT, MONEY_MINUS, true );
 					extra_y += LINESPACE;
@@ -313,7 +310,7 @@ void gui_vehicleinfo_t::draw(scr_coord offset)
 				freight_info.printf("%u/%u%s %s\n", v->get_fracht_menge(), v->get_fracht_max(), translator::translate(v->get_fracht_mass()), name);
 				v->get_fracht_info(freight_info);
 				// show it
-				const int px_len = display_multiline_text( pos.x+offset.x+w, pos.y+offset.y+total_height+extra_y, freight_info, COL_BLACK );
+				const int px_len = display_multiline_text( pos.x+offset.x+w, pos.y+offset.y+total_height+extra_y, freight_info, SYSCOL_TEXT );
 				if(px_len+w>x_size) {
 					x_size = px_len+w;
 				}
@@ -330,14 +327,14 @@ void gui_vehicleinfo_t::draw(scr_coord offset)
 			else {
 				// Non-freight (engine)
 				int cost = -v->get_betriebskosten();
-				int len = display_proportional_clip( pos.x+w+offset.x, pos.y+offset.y+total_height+extra_y, translator::translate("Max income:"), ALIGN_LEFT, COL_BLACK, true );
+				int len = display_proportional_clip( pos.x+w+offset.x, pos.y+offset.y+total_height+extra_y, translator::translate("Max income:"), ALIGN_LEFT, SYSCOL_TEXT, true );
 				money_to_string( number, cost/(100.0) );
 				display_proportional_clip( pos.x+w+offset.x+len, pos.y+offset.y+total_height+extra_y, number, ALIGN_LEFT, cost>=0?MONEY_PLUS:MONEY_MINUS, true );
 				extra_y += LINESPACE;
 				// Fixed costs
 				if(  sint64 cost = welt->scale_with_month_length(v->get_besch()->get_maintenance())  ) {
-					KOORD_VAL len = display_proportional_clip( pos.x+w+offset.x, pos.y+offset.y+total_height+extra_y, translator::translate("Maintenance"), ALIGN_LEFT, COL_BLACK, true );
-					len += display_proportional_clip( pos.x+w+offset.x+len, pos.y+offset.y+total_height+extra_y, ": ", ALIGN_LEFT, COL_BLACK, true );
+					KOORD_VAL len = display_proportional_clip( pos.x+w+offset.x, pos.y+offset.y+total_height+extra_y, translator::translate("Maintenance"), ALIGN_LEFT, SYSCOL_TEXT, true );
+					len += display_proportional_clip( pos.x+w+offset.x+len, pos.y+offset.y+total_height+extra_y, ": ", ALIGN_LEFT, SYSCOL_TEXT, true );
 					money_to_string( number, cost/(100.0) );
 					display_proportional_clip( pos.x+w+offset.x+len, pos.y+offset.y+total_height+extra_y, number, ALIGN_LEFT, MONEY_MINUS, true );
 					extra_y += LINESPACE;

@@ -84,7 +84,7 @@ void settings_general_stats_t::init(settings_t const* const sets)
 		}
 	}
 	savegame.set_focusable( false );
-	add_komponente( &savegame );
+	add_component( &savegame );
 	savegame.add_listener( this );
 	INIT_LB( "savegame version" );
 	label.back()->set_pos( scr_coord( 70 + 6, label.back()->get_pos().y + 2 ) );
@@ -274,7 +274,9 @@ void settings_economy_stats_t::init(settings_t const* const sets)
 	INIT_NUM( "toll_waycost_percentage", sets->get_way_toll_waycost_percentage(), 0, 100, gui_numberinput_t::AUTOLINEAR, false );
 	SEPERATOR
 
-	INIT_BOOL( "just_in_time", sets->get_just_in_time() );
+	INIT_NUM( "ai_construction_speed", sets->get_default_ai_construction_speed(), 0, 1000000000, 1000, false );
+	SEPERATOR
+	INIT_NUM( "just_in_time", env_t::just_in_time, 0, 2, gui_numberinput_t::AUTOLINEAR, false );
 	INIT_NUM( "maximum_intransit_percentage", sets->get_factory_maximum_intransit_percentage(), 0, 32767, gui_numberinput_t::AUTOLINEAR, false );
 	INIT_BOOL( "crossconnect_factories", sets->is_crossconnect_factories() );
 	INIT_NUM( "crossconnect_factories_percentage", sets->get_crossconnect_factor(), 0, 100, gui_numberinput_t::AUTOLINEAR, false );
@@ -284,6 +286,7 @@ void settings_economy_stats_t::init(settings_t const* const sets)
 	INIT_NUM( "max_factory_spacing", sets->get_max_factory_spacing(), 1, 32767, gui_numberinput_t::AUTOLINEAR, false );
 	INIT_NUM( "electric_promille", sets->get_electric_promille(), 0, 1000, gui_numberinput_t::AUTOLINEAR, false );
 	INIT_BOOL( "allow_underground_transformers", sets->get_allow_underground_transformers() );
+	INIT_NUM( "way_height_clearance", sets->get_way_height_clearance(), 1, 2, gui_numberinput_t::AUTOLINEAR, true );
 	SEPERATOR
 
 	INIT_NUM( "passenger_factor",  sets->get_passenger_factor(), 0, 16, gui_numberinput_t::AUTOLINEAR, false );
@@ -357,7 +360,10 @@ void settings_economy_stats_t::read(settings_t* const sets)
 	READ_NUM_VALUE( sets->way_toll_runningcost_percentage );
 	READ_NUM_VALUE( sets->way_toll_waycost_percentage );
 
-	READ_BOOL_VALUE( sets->just_in_time );
+	READ_NUM_VALUE( sets->default_ai_construction_speed );
+	env_t::default_ai_construction_speed = sets->get_default_ai_construction_speed();
+	READ_NUM_VALUE( env_t::just_in_time );
+	sets->just_in_time = env_t::just_in_time;
 	READ_NUM_VALUE( sets->factory_maximum_intransit_percentage );
 	READ_BOOL_VALUE( sets->crossconnect_factories );
 	READ_NUM_VALUE( sets->crossconnect_factor );
@@ -367,6 +373,7 @@ void settings_economy_stats_t::read(settings_t* const sets)
 	READ_NUM_VALUE( sets->max_factory_spacing );
 	READ_NUM_VALUE( sets->electric_promille );
 	READ_BOOL_VALUE( sets->allow_underground_transformers );
+	READ_NUM_VALUE( sets->way_height_clearance );
 
 	READ_NUM_VALUE( sets->passenger_factor );
 	READ_NUM_VALUE( sets->minimum_city_distance );

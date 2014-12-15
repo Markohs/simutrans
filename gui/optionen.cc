@@ -29,10 +29,6 @@
 #include "../dataobj/scenario.h"
 #include "../dataobj/translator.h"
 
-#ifdef _MSC_VER
-#include <direct.h>
-#endif
-
 enum BUTTONS {
 	BUTTON_LANGUAGE = 0,
 	BUTTON_PLAYERS,
@@ -47,18 +43,12 @@ enum BUTTONS {
 	BUTTON_QUIT
 };
 
-const char *option_buttons_text[] =
+static char const *const option_buttons_text[] =
 {
 	"Sprache", "Spieler(mz)", "Farbe", "Helligk.", "Sound",
 	"Neue Karte", "Load game", "Speichern", "Load scenario", "Scenario", "Beenden"
 };
 
-
-/* currently not used yet
-const char *option_buttons_tooltip[6] =
-{
-	"Sprache", "Farbe", "Helligk. u. Farben", "Sound settings", "Spielerliste", "Scenario information"
-};*/
 
 optionen_gui_t::optionen_gui_t() :
 	gui_frame_t( translator::translate("Einstellungen aendern"))
@@ -89,7 +79,7 @@ optionen_gui_t::optionen_gui_t() :
 			case BUTTON_QUIT:
 				cursor.y -= D_V_SPACE;
 				divider.init( scr_coord(D_MARGIN_LEFT, cursor.y), cursor.x - D_MARGIN_LEFT + D_BUTTON_WIDTH );
-				add_komponente( &divider );
+				add_component( &divider );
 				cursor.y += divider.get_size().h; //+D_V_SPACE;
 				break;
 
@@ -98,7 +88,7 @@ optionen_gui_t::optionen_gui_t() :
 		// Add button at cursor
 		option_buttons[i].init( button_t::roundbox, option_buttons_text[i], cursor, scr_size( D_BUTTON_WIDTH, D_BUTTON_HEIGHT ) );
 		option_buttons[i].add_listener(this);
-		add_komponente( option_buttons+i );
+		add_component( option_buttons+i );
 		cursor.y += D_BUTTON_HEIGHT + D_V_SPACE;
 	}
 

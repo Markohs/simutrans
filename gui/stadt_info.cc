@@ -23,7 +23,7 @@
 #include "../display/simgraph.h"
 
 #define PAX_DEST_X (138)
-#define PAX_DEST_Y (20)
+#define PAX_DEST_Y (4+D_TITLEBAR_HEIGHT)
 #define PAX_DEST_MARGIN (4)
 #define PAX_DEST_MIN_SIZE (16)		// minimum width/height of the minimap
 #define PAX_DEST_VERTICAL (4.0/3.0) // aspect factor where minimaps change to over/under instead of left/right
@@ -60,19 +60,19 @@ stadt_info_t::stadt_info_t(stadt_t* stadt_) :
 	name_input.set_size(scr_size(126, 13));
 	name_input.add_listener( this );
 
-	add_komponente(&name_input);
+	add_component(&name_input);
 
 	allow_growth.init( button_t::square_state, "Allow city growth", scr_coord(8, 4 + (D_BUTTON_HEIGHT+2) + 8*LINESPACE) );
 	allow_growth.pressed = stadt->get_citygrowth();
 	allow_growth.add_listener( this );
-	add_komponente(&allow_growth);
+	add_component(&allow_growth);
 
 	//CHART YEAR
 	chart.set_pos(scr_coord(21,1));
 	chart.set_size(scr_size(340,120));
 	chart.set_dimension(MAX_CITY_HISTORY_YEARS, 10000);
 	chart.set_seed(welt->get_last_year());
-	chart.set_background(MN_GREY1);
+	chart.set_background(SYSCOL_CHART_BACKGROUND);
 	for(  uint32 i = 0;  i<MAX_CITY_HISTORY;  i++  ) {
 		chart.add_curve( hist_type_color[i], stadt->get_city_history_year(), MAX_CITY_HISTORY, i, 12, STANDARD, (stadt->stadtinfo_options & (1<<i))!=0, true, 0 );
 	}
@@ -82,7 +82,7 @@ stadt_info_t::stadt_info_t(stadt_t* stadt_) :
 	mchart.set_size(scr_size(340,120));
 	mchart.set_dimension(MAX_CITY_HISTORY_MONTHS, 10000);
 	mchart.set_seed(0);
-	mchart.set_background(MN_GREY1);
+	mchart.set_background(SYSCOL_CHART_BACKGROUND);
 	for(  uint32 i = 0;  i<MAX_CITY_HISTORY;  i++  ) {
 		mchart.add_curve( hist_type_color[i], stadt->get_city_history_month(), MAX_CITY_HISTORY, i, 12, STANDARD, (stadt->stadtinfo_options & (1<<i))!=0, true, 0 );
 	}
@@ -91,7 +91,7 @@ stadt_info_t::stadt_info_t(stadt_t* stadt_) :
 	// tab (month/year)
 	year_month_tabs.add_tab(&chart, translator::translate("Years"));
 	year_month_tabs.add_tab(&mchart, translator::translate("Months"));
-	add_komponente(&year_month_tabs);
+	add_component(&year_month_tabs);
 
 	// add filter buttons          skip electricity
 	for(  int hist=0;  hist<MAX_CITY_HISTORY-1;  hist++  ) {
@@ -99,7 +99,7 @@ stadt_info_t::stadt_info_t(stadt_t* stadt_) :
 		filterButtons[hist].background_color = hist_type_color[hist];
 		filterButtons[hist].pressed = (stadt->stadtinfo_options & (1<<hist))!=0;
 		filterButtons[hist].add_listener(this);
-		add_komponente(filterButtons + hist);
+		add_component(filterButtons + hist);
 	}
 
 	pax_destinations_last_change = stadt->get_pax_destinations_new_change();
@@ -293,7 +293,7 @@ void stadt_info_t::draw(scr_coord pos, scr_size size)
 	buf.append( ": " );
 	buf.append( c->get_homeless(), 0 );
 
-	display_multiline_text(pos.x + 8, pos.y + D_TITLEBAR_HEIGHT + 4 + (D_BUTTON_HEIGHT+2), buf, COL_BLACK);
+	display_multiline_text(pos.x + 8, pos.y + D_TITLEBAR_HEIGHT + 4 + (D_BUTTON_HEIGHT+2), buf, SYSCOL_TEXT );
 
 	const unsigned long current_pax_destinations = c->get_pax_destinations_new_change();
 	if(  pax_destinations_last_change > current_pax_destinations  ) {
@@ -411,37 +411,37 @@ stadt_info_t::stadt_info_t() :
 {
 	name_input.set_pos(scr_coord(8, 4));
 	name_input.add_listener( this );
-	add_komponente(&name_input);
+	add_component(&name_input);
 
 	allow_growth.init( button_t::square_state, "Allow city growth", scr_coord(8, 4 + (D_BUTTON_HEIGHT+2) + 8*LINESPACE) );
 	allow_growth.add_listener( this );
-	add_komponente(&allow_growth);
+	add_component(&allow_growth);
 
 	//CHART YEAR
 	chart.set_pos(scr_coord(21,1));
 	chart.set_size(scr_size(340,120));
 	chart.set_dimension(MAX_CITY_HISTORY_YEARS, 10000);
 	chart.set_seed(welt->get_last_year());
-	chart.set_background(MN_GREY1);
+	chart.set_background(SYSCOL_CHART_BACKGROUND);
 
 	//CHART MONTH
 	mchart.set_pos(scr_coord(21,1));
 	mchart.set_size(scr_size(340,120));
 	mchart.set_dimension(MAX_CITY_HISTORY_MONTHS, 10000);
 	mchart.set_seed(0);
-	mchart.set_background(MN_GREY1);
+	mchart.set_background(SYSCOL_CHART_BACKGROUND);
 
 	// tab (month/year)
 	year_month_tabs.add_tab(&chart, translator::translate("Years"));
 	year_month_tabs.add_tab(&mchart, translator::translate("Months"));
-	add_komponente(&year_month_tabs);
+	add_component(&year_month_tabs);
 
 	// add filter buttons          skip electricity
 	for(  int hist=0;  hist<MAX_CITY_HISTORY-1;  hist++  ) {
 		filterButtons[hist].init(button_t::box_state, hist_type[hist], scr_coord(0,0), scr_size(D_BUTTON_WIDTH, D_BUTTON_HEIGHT));
 		filterButtons[hist].background_color = hist_type_color[hist];
 		filterButtons[hist].add_listener(this);
-		add_komponente(filterButtons + hist);
+		add_component(filterButtons + hist);
 	}
 	set_min_windowsize(scr_size(D_DEFAULT_WIDTH, 256));
 	set_resizemode(diagonal_resize);

@@ -187,7 +187,7 @@ bool loadsave_t::rd_open(const char *filename)
 			MEMZERO(buf);
 			if(  BZ2_bzRead( &fd->bse, fd->bzfp, buf, sizeof(SAVEGAME_PREFIX) )==sizeof(SAVEGAME_PREFIX)  &&  fd->bse==BZ_OK  ) {
 				// get the rest of the string
-				for(  int i=sizeof(SAVEGAME_PREFIX);  buf[i-1]>=32  &&  i<79;  i++  ) {
+				for(  int i=sizeof(SAVEGAME_PREFIX);  (uint8)buf[i-1] >= 32  &&  i<79;  i++  ) {
 					buf[i] = lsgetc();
 				}
 				ok = fd->bse==BZ_OK;
@@ -806,7 +806,7 @@ void loadsave_t::rdwr_bool(bool &i)
 			read( buffer, 5 );
 			buffer[5] = 0;
 			if(  strcmp("bool>",buffer)!=0  ) {
-				dbg->fatal( "loadsave_t::rdwr_str()","expected \"<bool>\", got \"<%s\"", buffer );
+				dbg->fatal( "loadsave_t::rdwr_bool()","expected \"<bool>\", got \"<%s\"", buffer );
 			}
 			read( buffer, 4 );
 			buffer[4] = 0;
@@ -815,7 +815,7 @@ void loadsave_t::rdwr_bool(bool &i)
 			read( buffer, 6 );
 			buffer[6] = 0;
 			if(  strcmp("/bool>",buffer)!=0  ) {
-				dbg->fatal( "loadsave_t::rdwr_str()","expected \"</bool>\", got \"<%s\"", buffer );
+				dbg->fatal( "loadsave_t::rdwr_bool()","expected \"</bool>\", got \"<%s\"", buffer );
 			}
 		}
 	}
@@ -839,7 +839,7 @@ void loadsave_t::rdwr_xml_number(sint64 &s, const char *typ)
 		read( buffer, len );
 		buffer[len] = 0;
 		if(  strcmp(typ,buffer)!=0  ) {
-			dbg->fatal( "loadsave_t::rdwr_str()","expected \"<%s>\", got \"<%s>\"", typ, buffer );
+			dbg->fatal( "loadsave_t::rdwr_xml_number()","expected \"<%s>\", got \"<%s>\"", typ, buffer );
 		}
 		while(  lsgetc()!='>'  )  ;
 		// read number;
@@ -882,7 +882,7 @@ void loadsave_t::rdwr_xml_number(sint64 &s, const char *typ)
 		read( buffer, len );
 		buffer[6] = 0;
 		if(  strcmp(typ,buffer)!=0  ) {
-			dbg->fatal( "loadsave_t::rdwr_str()","expected \"</%s>\", got \"</%s>\"", typ, buffer );
+			dbg->fatal( "loadsave_t::rdwr_xml_number()","expected \"</%s>\", got \"</%s>\"", typ, buffer );
 		}
 		while(  lsgetc()!='>'  )  ;
 	}
@@ -1080,8 +1080,8 @@ void loadsave_t::start_tag(const char *tag)
 			char buf[256];
 			// find start of tag
 			while(  lsgetc()!='<'  ) { /* nothing */ }
-			read(buf, strlen(tag));
-			if (!strstart(buf, tag)) {
+			read( buf, strlen(tag) );
+			if(  !strstart(buf, tag)  ) {
 				dbg->fatal( "loadsave_t::start_tag()","expected \"%s\", got \"%s\"", tag, buf );
 			}
 			while(  lsgetc()!='>'  )  ;

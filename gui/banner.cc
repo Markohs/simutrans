@@ -10,7 +10,6 @@
 #include "../display/simimg.h"
 #include "../simworld.h"
 #include "../simskin.h"
-#include "../gui/simwin.h"
 #include "../simsys.h"
 #include "../simversion.h"
 #include "../display/simgraph.h"
@@ -18,6 +17,7 @@
 #include "../besch/skin_besch.h"
 #include "../dataobj/environment.h"
 
+#include "simwin.h"
 #include "banner.h"
 #include "loadsave_frame.h"
 #include "scenario_frame.h"
@@ -40,20 +40,17 @@
 #define L_BANNER_TEXT_INDENT ( 4 )                             // Scroll text padding (left/right)
 #define L_BANNER_HEIGHT      ( L_BANNER_ROWS * LINESPACE + 2 ) // Banner control height in pixels
 
-#define L_DIALOG_WIDTH (D_MARGIN_LEFT + 3*D_BUTTON_WIDTH + 2*D_H_SPACE + D_MARGIN_RIGHT)
+#define L_DIALOG_WIDTH (D_MARGINS_X + 3*D_BUTTON_WIDTH + 2*D_H_SPACE)
 
 #ifdef _OPTIMIZED
 	#define L_DEBUG_TEXT " (optimized)"
+#elif defined DEBUG
+#	define L_DEBUG_TEXT " (debug)"
 #else
-	#ifdef DEBUG
-		#define L_DEBUG_TEXT " (debug)"
-	#else
-		#define L_DEBUG_TEXT
-	#endif // debug
-#endif // optimized
+#	define L_DEBUG_TEXT
+#endif
 
 // colors
-#define COL_PT (5)
 #define COLOR_RAMP_SIZE ( 5 ) // Number or fade colors + normal color at index 0
 
 // Banner color ramp
@@ -85,37 +82,37 @@ banner_t::banner_t() : gui_frame_t(""),
 
 	// Position logo in relation to text drawn by draw()
 	logo.set_pos( scr_coord(width - D_MARGIN_RIGHT - skinverwaltung_t::logosymbol->get_bild(0)->get_pic()->w, D_MARGIN_TOP + L_LINESPACE_EXTRA_5 + L_LINESPACE_EXTRA_7 ) );
-	add_komponente( &logo );
+	add_component( &logo );
 
 	// New game button
 	new_map.init( button_t::roundbox, "Neue Karte", cursor, button_size );
 	new_map.add_listener( this );
-	add_komponente( &new_map );
+	add_component( &new_map );
 	cursor.x += button_size.w + D_H_SPACE;
 
 	// Load game button
 	load_map.init( button_t::roundbox, "Load game", cursor, button_size );
 	load_map.add_listener( this );
-	add_komponente( &load_map );
+	add_component( &load_map );
 	cursor.x += button_size.w + D_H_SPACE;
 
 	// Load scenario button
 	load_scenario.init( button_t::roundbox, "Load scenario", cursor, button_size );
 	load_scenario.add_listener( this );
-	add_komponente( &load_scenario );
+	add_component( &load_scenario );
 	cursor.y += D_BUTTON_HEIGHT + D_V_SPACE;
 	cursor.x  = D_MARGIN_LEFT + button_size.w + D_H_SPACE;
 
 	// Play online button
 	join_map.init( button_t::roundbox, "join game", cursor, button_size );
 	join_map.add_listener( this );
-	add_komponente( &join_map );
+	add_component( &join_map );
 	cursor.x += button_size.w + D_H_SPACE;
 
 	// Quit button
 	quit.init( button_t::roundbox, "Beenden", cursor, button_size );
 	quit.add_listener( this );
-	add_komponente( &quit );
+	add_component( &quit );
 	cursor += D_BUTTON_SIZE;
 
 	set_windowsize( scr_size( width, D_TITLEBAR_HEIGHT + cursor.y + D_MARGIN_BOTTOM ) );
@@ -165,41 +162,41 @@ void banner_t::draw(scr_coord pos, scr_size size )
 	display_fillbox_wh(pos.x, pos.y + D_TITLEBAR_HEIGHT, size.w, 1, COL_GREY6, false);
 
 	// Max Kielland: Add shadow as property to label_t so we can use the label_t class instead...
-	display_shadow_proportional( cursor.x, cursor.y, COL_PT, COL_BLACK, "This is Simutrans" SIM_VERSION_BUILD_STRING, true );
+	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_TITLE, SYSCOL_TEXT_SHADOW, "This is Simutrans" SIM_VERSION_BUILD_STRING, true );
 	cursor.y += L_LINESPACE_EXTRA_5;
 
 #ifdef REVISION
-	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_HIGHLIGHT, COL_BLACK, "Version " VERSION_NUMBER " " VERSION_DATE " r" QUOTEME(REVISION) L_DEBUG_TEXT, true );
+	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_HIGHLIGHT, SYSCOL_TEXT_SHADOW, "Version " VERSION_NUMBER " " VERSION_DATE " r" QUOTEME(REVISION) L_DEBUG_TEXT, true );
 #else
-	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_HIGHLIGHT, COL_BLACK, "Version " VERSION_NUMBER " " VERSION_DATE L_DEBUG_TEXT, true );
+	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_HIGHLIGHT, SYSCOL_TEXT_SHADOW, "Version " VERSION_NUMBER " " VERSION_DATE L_DEBUG_TEXT, true );
 #endif
 	cursor.y += L_LINESPACE_EXTRA_7;
 
-	display_shadow_proportional( cursor.x, cursor.y, COL_PT, COL_BLACK, "The version is developed by", true );
+	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_TITLE, SYSCOL_TEXT_SHADOW, "The version is developed by", true );
 	cursor += scr_coord (L_TEXT_INDENT,L_LINESPACE_EXTRA_5);
 
-	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_HIGHLIGHT, COL_BLACK, "the simutrans team", true );
+	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_HIGHLIGHT, SYSCOL_TEXT_SHADOW, "the simutrans team", true );
 	cursor.y += L_LINESPACE_EXTRA_2;
 
-	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_HIGHLIGHT, COL_BLACK, "under the Artistic Licence", true );
+	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_HIGHLIGHT, SYSCOL_TEXT_SHADOW, "under the Artistic Licence", true );
 	cursor.y += L_LINESPACE_EXTRA_2;
 
-	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_HIGHLIGHT, COL_BLACK, "based on Simutrans 84.22.1", true );
+	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_HIGHLIGHT, SYSCOL_TEXT_SHADOW, "based on Simutrans 84.22.1", true );
 	cursor += scr_coord (-L_TEXT_INDENT,L_LINESPACE_EXTRA_7);
 
-	display_shadow_proportional( cursor.x, cursor.y, COL_ORANGE, COL_BLACK, "Selling of the program is forbidden.", true );
+	display_shadow_proportional( cursor.x, cursor.y, COL_ORANGE, SYSCOL_TEXT_SHADOW, "Selling of the program is forbidden.", true );
 	cursor.y += L_LINESPACE_EXTRA_5;
 
-	display_shadow_proportional( cursor.x, cursor.y, COL_PT, COL_BLACK, "For questions and support please visit:", true );
+	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_TITLE, SYSCOL_TEXT_SHADOW, "For questions and support please visit:", true );
 	cursor += scr_coord (L_TEXT_INDENT,L_LINESPACE_EXTRA_2);
 
-	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_HIGHLIGHT, COL_BLACK, "http://www.simutrans.com", true );
+	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_HIGHLIGHT, SYSCOL_TEXT_SHADOW, "http://www.simutrans.com", true );
 	cursor.y += L_LINESPACE_EXTRA_2;
 
-	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_HIGHLIGHT, COL_BLACK, "http://forum.simutrans.com", true );
+	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_HIGHLIGHT, SYSCOL_TEXT_SHADOW, "http://forum.simutrans.com", true );
 	cursor.y += L_LINESPACE_EXTRA_2;
 
-	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_HIGHLIGHT, COL_BLACK, "http://wiki.simutrans-germany.com/", true );
+	display_shadow_proportional( cursor.x, cursor.y, SYSCOL_TEXT_HIGHLIGHT, SYSCOL_TEXT_SHADOW, "http://wiki.simutrans.com", true );
 	cursor.y += L_LINESPACE_EXTRA_7;
 
 	// now the scrolling

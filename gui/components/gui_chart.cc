@@ -27,7 +27,7 @@ void gui_chart_t::set_background(int i)
 }
 
 
-gui_chart_t::gui_chart_t() : gui_komponente_t()
+gui_chart_t::gui_chart_t() : gui_component_t()
 {
 	// no toolstips at the start
 	tooltipcoord = scr_coord::invalid;
@@ -138,7 +138,7 @@ void gui_chart_t::draw(scr_coord offset)
 	}
 
 	// draw zero line
-	display_direct_line(offset.x+1, offset.y+(scr_coord_val)baseline, offset.x+size.w-2, offset.y+(scr_coord_val)baseline, MN_GREY4);
+	display_direct_line(offset.x+1, offset.y+(scr_coord_val)baseline, offset.x+size.w-2, offset.y+(scr_coord_val)baseline, SYSCOL_CHART_LINES_ZERO);
 
 	if (show_y_axis) {
 
@@ -160,16 +160,17 @@ void gui_chart_t::draw(scr_coord offset)
 	for(  int i = 0;  i < x_elements;  i++  ) {
 		const int j = env_t::left_to_right_graphs ? x_elements - 1 - i : i;
 		const scr_coord_val x0 = tmpx + factor * (size.w / (x_elements - 1) ) * j;
+		const COLOR_VAL line_color = (i%2) ? SYSCOL_CHART_LINES_ODD : SYSCOL_CHART_LINES_EVEN;
 		if(  show_x_axis  ) {
 			// display x-axis
 			sprintf( digit, "%i", abs(seed - j) );
 			scr_coord_val x =  x0 - (seed != j ? (int)(2 * log( (double)abs(seed - j) )) : 0);
 			if(  x > x_last  ) {
-				x_last = x + display_proportional_clip( x, offset.y + size.h + 6, digit, ALIGN_LEFT, SYSCOL_TEXT_HIGHLIGHT, true );
+				x_last = x + display_proportional_clip( x, offset.y + size.h + 6, digit, ALIGN_LEFT, line_color, true );
 			}
 		}
 		// year's vertical lines
-		display_vline_wh_clip( x0, offset.y + 1, size.h - 2, MN_GREY4, false );
+		display_vline_wh_clip( x0, offset.y + 1, size.h - 2, line_color, false );
 	}
 
 	// display current value?
@@ -330,7 +331,7 @@ void gui_chart_t::calc_gui_chart_values(sint64 *baseline, float *scale, char *cm
 
 
 /**
- * Events werden hiermit an die GUI-Komponenten
+ * Events werden hiermit an die GUI-components
  * gemeldet
  * @author Hj. Malthaner
  */

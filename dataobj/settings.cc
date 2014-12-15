@@ -153,8 +153,7 @@ settings_t::settings_t() :
 	max_factory_spacing = 40;
 	max_factory_spacing_percentage = 0; // off
 
-	/* prissi: do not distribute goods to overflowing factories */
-	just_in_time = true;
+	just_in_time = env_t::just_in_time;
 
 	fussgaenger = true;
 	stadtauto_duration = 36;	// three years
@@ -177,6 +176,9 @@ settings_t::settings_t() :
 	 * 724: correct one, faktor sqrt(2)
 	 */
 	pak_diagonal_multiplier = 724;
+
+	// assume ´sinble level is enough
+	way_height_clearance = 1;
 
 	strcpy( language_code_names, "en" );
 
@@ -203,6 +205,7 @@ settings_t::settings_t() :
 		default_player_color[i][1] = 255;
 	}
 	default_player_color_random = false;
+	default_ai_construction_speed = env_t::default_ai_construction_speed;
 
 	/* the big cost section */
 	freeplay = false;
@@ -412,8 +415,16 @@ void settings_t::rdwr(loadsave_t *file)
 		else {
 			beginner_mode = false;
 		}
-		if(file->get_version()>=89004) {
-			file->rdwr_bool(just_in_time );
+		if(  file->get_version()>120000  ){
+			file->rdwr_byte( just_in_time );
+		}
+		else if(  file->get_version()>=89004  ) {
+			bool compat = just_in_time > 0;
+			file->rdwr_bool( compat );
+			just_in_time = 0;
+			if(  compat  ) {
+				just_in_time = env_t::just_in_time ? env_t::just_in_time : 1;
+			}
 		}
 		// rotation of the map with respect to the original value
 		if(file->get_version()>=99015) {
@@ -442,6 +453,7 @@ void settings_t::rdwr(loadsave_t *file)
 				climate_borders[i] *= env_t::pak_height_conversion_factor;
 			}
 			winter_snowline *= env_t::pak_height_conversion_factor;
+			way_height_clearance = env_t::pak_height_conversion_factor;
 		}
 
 		// since vehicle will need realignment afterwards!
@@ -450,7 +462,7 @@ void settings_t::rdwr(loadsave_t *file)
 		}
 		else {
 			uint16 old_multiplier = pak_diagonal_multiplier;
-			file->rdwr_short(old_multiplier );
+			file->rdwr_short( old_multiplier );
 			vehikel_basis_t::set_diagonal_multiplier( pak_diagonal_multiplier, old_multiplier );
 			// since vehicle will need realignment afterwards!
 		}
@@ -755,6 +767,13 @@ void settings_t::rdwr(loadsave_t *file)
 		}
 		if(  file->get_version()>=112008  ) {
 			file->rdwr_longlong( cst_alter_climate );
+			file->rdwr_byte( way_height_clearance );
+		}
+		if(  file->get_version()>=120002  ) {
+			file->rdwr_long( default_ai_construction_speed );
+		}
+		else if(  file->is_loading()  ) {
+			default_ai_construction_speed = env_t::default_ai_construction_speed;
 		}
 		// otherwise the default values of the last one will be used
 	}
@@ -840,12 +859,15 @@ void settings_t::parse_simuconf(tabfile_t& simuconf, sint16& disp_width, sint16&
 	env_t::show_delete_buttons = contents.get_int("show_delete_buttons",env_t::show_delete_buttons ) != 0;
 	env_t::chat_window_transparency = contents.get_int("chat_transparency",env_t::chat_window_transparency );
 
+	env_t::hide_keyboard = contents.get_int("hide_keyboard",env_t::hide_keyboard ) != 0;
+
 	// network stuff
 	env_t::server_frames_ahead = contents.get_int("server_frames_ahead", env_t::server_frames_ahead );
 	env_t::additional_client_frames_behind = contents.get_int("additional_client_frames_behind", env_t::additional_client_frames_behind);
 	env_t::network_frames_per_step = contents.get_int("server_frames_per_step", env_t::network_frames_per_step );
 	env_t::server_sync_steps_between_checks = contents.get_int("server_frames_between_checks", env_t::server_sync_steps_between_checks );
 	env_t::pause_server_no_clients = contents.get_int("pause_server_no_clients", env_t::pause_server_no_clients );
+	env_t::server_save_game_on_quit = contents.get_int("server_save_game_on_quit", env_t::server_save_game_on_quit );
 
 	env_t::server_announce = contents.get_int("announce_server", env_t::server_announce );
 	env_t::server_announce = contents.get_int("server_announce", env_t::server_announce );
@@ -1192,6 +1214,7 @@ void settings_t::parse_simuconf(tabfile_t& simuconf, sint16& disp_width, sint16&
 			default_player_color[i][1] = c2;
 		}
 	}
+	default_ai_construction_speed = env_t::default_ai_construction_speed = contents.get_int("ai_construction_speed", env_t::default_ai_construction_speed );
 
 	maint_building = contents.get_int("maintenance_building", maint_building );
 
@@ -1216,14 +1239,25 @@ void settings_t::parse_simuconf(tabfile_t& simuconf, sint16& disp_width, sint16&
 	max_no_of_trees_on_square = contents.get_int("max_no_of_trees_on_square", max_no_of_trees_on_square );
 	tree_climates = contents.get_int("tree_climates", tree_climates );
 	no_tree_climates = contents.get_int("no_tree_climates", no_tree_climates );
-	no_trees	= contents.get_int("no_trees", no_trees );
+	no_trees = contents.get_int("no_trees", no_trees );
+	lake = !contents.get_int("no_lakes", !lake );
 
 	// these are pak specific; the diagonal length affect travelling time (is game critical)
 	pak_diagonal_multiplier = contents.get_int("diagonal_multiplier", pak_diagonal_multiplier );
 	// the height in z-direction will only cause pixel errors but not a different behaviour
 	env_t::pak_tile_height_step = contents.get_int("tile_height", env_t::pak_tile_height_step );
 	// new height for old slopes after conversion - 1=single height, 2=double height
+	// Must be only overwrite when reading from pak dir ...
 	env_t::pak_height_conversion_factor = contents.get_int("height_conversion_factor", env_t::pak_height_conversion_factor );
+
+	// minimum clearance under under bridges: 1 or 2? (HACK: value only zero during loading of pak set config)
+	int bounds = (way_height_clearance!=0);
+	way_height_clearance  = contents.get_int("way_height_clearance", way_height_clearance );
+	if(  way_height_clearance > 2  &&  way_height_clearance < bounds  ) {
+		sint8 new_whc = clamp( way_height_clearance, bounds, 2 );
+		dbg->warning( "settings_t::parse_simuconf()", "Illegal way_height_clearance of %i set to %i", way_height_clearance, new_whc );
+		way_height_clearance = new_whc;
+	}
 
 	min_factory_spacing = contents.get_int("factory_spacing", min_factory_spacing );
 	min_factory_spacing = contents.get_int("min_factory_spacing", min_factory_spacing );
@@ -1233,7 +1267,11 @@ void settings_t::parse_simuconf(tabfile_t& simuconf, sint16& disp_width, sint16&
 	crossconnect_factor = contents.get_int("crossconnect_factories_percentage", crossconnect_factor );
 	electric_promille = contents.get_int("electric_promille", electric_promille );
 
-	just_in_time = contents.get_int("just_in_time", just_in_time) != 0;
+	env_t::just_in_time = (uint8)contents.get_int("just_in_time", env_t::just_in_time);
+	if( env_t::just_in_time > 2 ) {
+		env_t::just_in_time = 2; // Range restriction.
+	}
+	just_in_time = env_t::just_in_time;
 	beginner_price_factor = contents.get_int("beginner_price_factor", beginner_price_factor ); /* this manipulates the good prices in beginner mode */
 	beginner_mode = contents.get_int("first_beginner", beginner_mode ); /* start in beginner mode */
 
@@ -1283,15 +1321,20 @@ void settings_t::parse_simuconf(tabfile_t& simuconf, sint16& disp_width, sint16&
 	while (*str == ' ') str++;
 	if (strcmp(str, "binary") == 0) {
 		loadsave_t::set_savemode(loadsave_t::binary );
-	} else if(strcmp(str, "zipped") == 0) {
+	}
+	else if(strcmp(str, "zipped") == 0) {
 		loadsave_t::set_savemode(loadsave_t::zipped );
-	} else if(strcmp(str, "xml") == 0) {
+	}
+	else if(strcmp(str, "xml") == 0) {
 		loadsave_t::set_savemode(loadsave_t::xml );
-	} else if(strcmp(str, "xml_zipped") == 0) {
+	}
+	else if(strcmp(str, "xml_zipped") == 0) {
 		loadsave_t::set_savemode(loadsave_t::xml_zipped );
-	} else if(strcmp(str, "bzip2") == 0) {
+	}
+	else if(strcmp(str, "bzip2") == 0) {
 		loadsave_t::set_savemode(loadsave_t::bzip2 );
-	} else if(strcmp(str, "xml_bzip2") == 0) {
+	}
+	else if(strcmp(str, "xml_bzip2") == 0) {
 		loadsave_t::set_savemode(loadsave_t::xml_bzip2 );
 	}
 
@@ -1299,15 +1342,20 @@ void settings_t::parse_simuconf(tabfile_t& simuconf, sint16& disp_width, sint16&
 	while (*str == ' ') str++;
 	if (strcmp(str, "binary") == 0) {
 		loadsave_t::set_autosavemode(loadsave_t::binary );
-	} else if(strcmp(str, "zipped") == 0) {
+	}
+	else if(strcmp(str, "zipped") == 0) {
 		loadsave_t::set_autosavemode(loadsave_t::zipped );
-	} else if(strcmp(str, "xml") == 0) {
+	}
+	else if(strcmp(str, "xml") == 0) {
 		loadsave_t::set_autosavemode(loadsave_t::xml );
-	} else if(strcmp(str, "xml_zipped") == 0) {
+	}
+	else if(strcmp(str, "xml_zipped") == 0) {
 		loadsave_t::set_autosavemode(loadsave_t::xml_zipped );
-	} else if(strcmp(str, "bzip2") == 0) {
+	}
+	else if(strcmp(str, "bzip2") == 0) {
 		loadsave_t::set_autosavemode(loadsave_t::bzip2 );
-	} else if(strcmp(str, "xml_bzip2") == 0) {
+	}
+	else if(strcmp(str, "xml_bzip2") == 0) {
 		loadsave_t::set_autosavemode(loadsave_t::xml_bzip2 );
 	}
 

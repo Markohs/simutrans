@@ -439,7 +439,6 @@ bool ai_goods_t::create_ship_transport_vehikel(fabrik_t *qfab, int anz_vehikel)
 			cnv->add_vehikel( v );
 		}
 
-		welt->sync_add( cnv );
 		cnv->set_line(line);
 		cnv->start();
 	}
@@ -497,7 +496,6 @@ void ai_goods_t::create_road_transport_vehikel(fabrik_t *qfab, int anz_vehikel)
 			cnv->set_name(v->get_besch()->get_name());
 			cnv->add_vehikel( v );
 
-			welt->sync_add( cnv );
 			cnv->set_line(line);
 			cnv->start();
 		}
@@ -558,7 +556,6 @@ void ai_goods_t::create_rail_transport_vehikel(const koord platz1, const koord p
 	fpl->eingabe_abschliessen();
 
 	cnv->set_schedule(fpl);
-	welt->sync_add( cnv );
 	cnv->start();
 }
 
@@ -656,8 +653,16 @@ bool ai_goods_t::create_simple_rail_transport()
 	koord diff1( sgn(size1.x), sgn(size1.y) );
 	koord perpend( sgn(size1.y), sgn(size1.x) );
 	while(k!=size1+platz1) {
+		climate c = welt->get_climate(k);
 		if(!welt->ebne_planquadrat( this, k, z1 )) {
 			return false;
+		}
+		// ensure is land
+		grund_t* bd = welt->lookup_kartenboden(k);
+		if (bd->get_typ() == grund_t::wasser) {
+			welt->set_water_hgt(k, bd->get_hoehe()-1);
+			welt->access(k)->correct_water();
+			welt->set_climate(k, c, true);
 		}
 		k += diff1;
 	}
@@ -668,8 +673,16 @@ bool ai_goods_t::create_simple_rail_transport()
 	perpend = koord( sgn(size2.y), sgn(size2.x) );
 	koord diff2( sgn(size2.x), sgn(size2.y) );
 	while(k!=size2+platz2) {
+		climate c = welt->get_climate(k);
 		if(!welt->ebne_planquadrat(this,k,z2)) {
 			return false;
+		}
+		// ensure is land
+		grund_t* bd = welt->lookup_kartenboden(k);
+		if (bd->get_typ() == grund_t::wasser) {
+			welt->set_water_hgt(k, bd->get_hoehe()-1);
+			welt->access(k)->correct_water();
+			welt->set_climate(k, c, true);
 		}
 		k += diff2;
 	}

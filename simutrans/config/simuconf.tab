@@ -157,6 +157,9 @@ no_routing_over_overcrowded = 0
 # in beginner mode, all good prices are multiplied by a factor (default 1500=1.5)
 beginner_price_factor = 1500
 
+# Construction speed of new AIs, the heigher the faster (default 8000)
+#ai_construction_speed = 8000
+
 ##################################factory stuff#################################
 
 # when a city reaches 2^n times of this number
@@ -186,7 +189,8 @@ electric_promille = 330
 # true if transformers are allowed underground (default)
 allow_underground_transformers = 1
 
-# with this switch on (default), overcrowded factories will not receive goods any more
+# with this switch on overcrowded factories will not receive goods any more
+# There are three settings 0=off, 1=old_style (default), 2=new_style
 just_in_time = 1
 
 # how much amount in transport is sent before further distribution stops
@@ -208,6 +212,12 @@ factory_arrival_periods = 4
 factory_enforce_demand = 1
 
 ##################################display stuff#################################
+
+# if run on a mobile device, setting hide_keyboard=1 will only show the keyboard
+# when there is text to input in a dialoge. Other than that textinput will not
+# be possible (no keyboard short cuts).
+# Currently only supported with SDL2
+hide_keyboard = 0
 
 # if defined, the default tool will try to calculate straight ways (like OpenTTD)
 straight_way_without_control = 0
@@ -233,12 +243,13 @@ unprotect_abandoned_player_months = 0
 # THIS WILL BE ONLY USED, WHEN THIS FILE IS IN THE pakxyz/config!
 #diagonal_multiplier = 724
 
+# new height for old slopes when old single height savegame loaded with double height pak (default 1=single height, 2=double height)
+# THIS WILL BE ONLY USED, WHEN THIS FILE IS IN THE pakxyz/config!
+#height_conversion_factor = 1
+
 # how height is a tile in z-direction (default 16, TTD 8)
 # THIS WILL BE ONLY USED, WHEN THIS FILE IS IN THE pakxyz/config!
 #tile_height = 16
-
-# new height for old slopes when old single height savegame loaded with double height pak (default 1=single height, 2=double height)
-#height_conversion_factor = 1
 
 # (=1) drive on the left side of the road
 drive_left = 0
@@ -413,6 +424,9 @@ toll_waycost_percentage = 0
 # Minimum distance of a city attraction to other special buildings
 #special_building_distance = 3
 
+# Minimum clearance under bridges is 1 or 2 levels? (default = conversion factor)
+#way_height_clearance = 1
+
 # Max. length of initial intercity road connections
 # If you want to speed up map creation, lower this value.
 # If you want more initial intercity roads, raise this value.
@@ -461,6 +475,8 @@ toll_waycost_percentage = 0
 # Number of trees on square 2 - minimal usable, 3 good, 4 very nice looking
 max_no_of_trees_on_square = 3
 
+# All following tree options are only active during map generation/extension.
+
 # Base forest size - minimal size of forest - map independent
 forest_base_size = 36
 
@@ -482,7 +498,10 @@ no_tree_climates = 130
 
 # if set, no trees will be created at all (save about 30% memory and
 # the season change will be much smoother on small machines)
-#no_tree = 0
+no_trees = 0
+
+# if set, no lakes will be created at all
+no_lakes = 0
 
 ###################################time stuff###################################
 
@@ -633,6 +652,9 @@ fast_forward = 50
 
 # Pause server when no clients are connected
 #pause_server_no_clients = 1
+
+# Server saves savegame when being killed (default=0 off)
+#server_save_game_on_quit = 0
 
 # Nickname when joining network games
 #nickname = John Doe

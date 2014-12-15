@@ -21,6 +21,7 @@
 #include "../dataobj/translator.h"
 #include "../unicode.h"
 #include "../simticker.h"
+#include "../utils/simstring.h"
 #include "simgraph.h"
 
 
@@ -278,7 +279,7 @@ static xrange      xranges[MAX_POLY_CLIPS];
  */
 static bool has_unicode = false;
 
-static font_type large_font = { 0, 0, 0, NULL, NULL };
+static font_type large_font;
 
 // needed for resizing gui
 int large_font_ascent = 9;
@@ -1807,15 +1808,14 @@ void display_fit_img_to_width( const image_id n, sint16 new_w )
 {
 	if(  n < anz_images  &&  images[n].base_h > 0  &&  images[n].w != new_w  ) {
 		int old_zoom_factor = zoom_factor;
-		sint16 start_w = 32767;
 		for(  int i=0;  i<=MAX_ZOOM_FACTOR;  i++  ) {
 			int zoom_w = (images[n].base_w * zoom_num[i]) / zoom_den[i];
-			if(  start_w > new_w  &&  zoom_w <= new_w  ) {
+			if(  zoom_w <= new_w  ) {
 				uint8 old_zoom_flag = images[n].recode_flags & FLAG_ZOOMABLE;
-				images[n].recode_flags &= ~FLAG_ZOOMABLE;
 				images[n].recode_flags |= FLAG_REZOOM | FLAG_ZOOMABLE;
 				zoom_factor = i;
 				rezoom_img(n);
+				images[n].recode_flags &= ~FLAG_ZOOMABLE;
 				images[n].recode_flags |= old_zoom_flag;
 				zoom_factor = old_zoom_factor;
 				return;
@@ -2583,7 +2583,7 @@ static void display_three_image_row( image_id i1, image_id i2, image_id i3, scr_
 			row.x += w;
 			row.w -= w;
 		}
-		// for the rest we have to clip the retange
+		// for the rest we have to clip the rectangle
 		if(  row.w > 0  ) {
 			clip_dimension const cl = display_get_clip_wh();
 			display_set_clip_wh( cl.x, cl.y, max(0,min(row.get_right(),cl.xx)-cl.x), cl.h );
@@ -2615,10 +2615,10 @@ void display_img_stretch( const stretch_map_t &imag, scr_rect area )
 		area.y += (area.h-h)/2;
 	}
 
-	// bottom
+	// top row
 	display_three_image_row( imag[0][0], imag[1][0], imag[2][0], area );
 
-	// top row (assuming same height for all!)
+	// bottom row
 	if(  imag[0][2]!=IMG_LEER  ) {
 		scr_rect row( area.x, area.y+area.h-h_bottom, area.w, h_bottom );
 		display_three_image_row( imag[0][2], imag[1][2], imag[2][2], row );
@@ -2634,7 +2634,7 @@ void display_img_stretch( const stretch_map_t &imag, scr_rect area )
 			row.y += h;
 			row.h -= h;
 		}
-		// for the rest we have to clip the retangle
+		// for the rest we have to clip the rectangle
 		if(  row.h > 0  ) {
 			clip_dimension const cl = display_get_clip_wh();
 			display_set_clip_wh( cl.x, cl.y, cl.w, max(0,min(row.get_bottom(),cl.yy)-cl.y) );
@@ -2669,7 +2669,7 @@ static void display_three_blend_row( image_id i1, image_id i2, image_id i3, scr_
 			row.x += w;
 			row.w -= w;
 		}
-		// for the rest we have to clip the retange
+		// for the rest we have to clip the rectangle
 		if(  row.w > 0  ) {
 			clip_dimension const cl = display_get_clip_wh();
 			display_set_clip_wh( cl.x, cl.y, max(0,min(row.get_right(),cl.xx)-cl.x), cl.h );
@@ -2701,10 +2701,10 @@ void display_img_stretch_blend( const stretch_map_t &imag, scr_rect area, PLAYER
 		area.y += (area.h-h)/2;
 	}
 
-	// bottom
+	// top row
 	display_three_blend_row( imag[0][0], imag[1][0], imag[2][0], area, color );
 
-	// top row (assuming same height for all!)
+	// bottom row
 	if(  imag[0][2]!=IMG_LEER  ) {
 		scr_rect row( area.x, area.y+area.h-h_bottom, area.w, h_bottom );
 		display_three_blend_row( imag[0][2], imag[1][2], imag[2][2], row, color );
@@ -2720,7 +2720,7 @@ void display_img_stretch_blend( const stretch_map_t &imag, scr_rect area, PLAYER
 			row.y += h;
 			row.h -= h;
 		}
-		// for the rest we have to clip the retangle
+		// for the rest we have to clip the rectangle
 		if(  row.h > 0  ) {
 			clip_dimension const cl = display_get_clip_wh();
 			display_set_clip_wh( cl.x, cl.y, cl.w, max(0,min(row.get_bottom(),cl.yy)-cl.y) );
@@ -2835,7 +2835,7 @@ void display_color_img(const unsigned n, KOORD_VAL xp, KOORD_VAL yp, sint8 playe
 			activate_player_color( player_nr, daynight );
 
 			// color replacement needs the original data => sp points to non-cached data
-			const PIXVAL *sp = (tile_raster_width != base_tile_raster_width  &&  images[n].zoom_data != NULL) ? images[n].zoom_data : images[n].base_data;
+			const PIXVAL *sp = images[n].zoom_data != NULL ? images[n].zoom_data : images[n].base_data;
 
 			// clip top/bottom
 #ifdef MULTI_THREAD
@@ -3316,7 +3316,7 @@ static void pix_alpha_15(PIXVAL *dest, const PIXVAL *src, const PIXVAL *alphamap
 
 	const uint16 rmask = alpha_flags & ALPHA_RED ? 0x001f : 0;
 	const uint16 gmask = alpha_flags & ALPHA_GREEN ? 0x03e0 : 0;
-	const uint16 bmask = alpha_flags & ALPHA_BLUE ? 0x7b00 : 0;
+	const uint16 bmask = alpha_flags & ALPHA_BLUE ? 0x7c00 : 0;
 
 	while(  dest < end  ) {
 		// read mask components - always 15bpp
@@ -3330,17 +3330,17 @@ static void pix_alpha_15(PIXVAL *dest, const PIXVAL *src, const PIXVAL *alphamap
 			alpha_value = alpha_value > 15 ? alpha_value + 1 : alpha_value;
 
 			//read screen components - 15bpp
-			const uint16 rbs = (*dest) & 0x7b1f;
+			const uint16 rbs = (*dest) & 0x7c1f;
 			const uint16 gs =  (*dest) & 0x03e0;
 
 			// read image components - 15bpp
-			const uint16 rbi = (*src) & 0x7b1f;
+			const uint16 rbi = (*src) & 0x7c1f;
 			const uint16 gi =  (*src) & 0x03e0;
 
 			// calculate and write destination components - 16bpp
 			const uint16 rbd = ((rbi * alpha_value) + (rbs * (32 - alpha_value))) >> 5;
 			const uint16 gd  = ((gi  * alpha_value) + (gs  * (32 - alpha_value))) >> 5;
-			*dest = (rbd & 0x7b1f) | (gd & 0x03e0);
+			*dest = (rbd & 0x7c1f) | (gd & 0x03e0);
 		}
 
 		dest++;
@@ -3356,7 +3356,7 @@ static void pix_alpha_16(PIXVAL *dest, const PIXVAL *src, const PIXVAL *alphamap
 
 	const uint16 rmask = alpha_flags & ALPHA_RED ? 0x001f : 0;
 	const uint16 gmask = alpha_flags & ALPHA_GREEN ? 0x03e0 : 0;
-	const uint16 bmask = alpha_flags & ALPHA_BLUE ? 0x7b00 : 0;
+	const uint16 bmask = alpha_flags & ALPHA_BLUE ? 0x7c00 : 0;
 
 	while(  dest < end  ) {
 		// read mask components - always 15bpp
@@ -3396,7 +3396,7 @@ static void pix_alpha_recode_15(PIXVAL *dest, const PIXVAL *src, const PIXVAL *a
 
 	const uint16 rmask = alpha_flags & ALPHA_RED ? 0x001f : 0;
 	const uint16 gmask = alpha_flags & ALPHA_GREEN ? 0x03e0 : 0;
-	const uint16 bmask = alpha_flags & ALPHA_BLUE ? 0x7b00 : 0;
+	const uint16 bmask = alpha_flags & ALPHA_BLUE ? 0x7c00 : 0;
 
 	while(  dest < end  ) {
 		// read mask components - always 15bpp
@@ -3410,17 +3410,17 @@ static void pix_alpha_recode_15(PIXVAL *dest, const PIXVAL *src, const PIXVAL *a
 			alpha_value = alpha_value > 15 ? alpha_value + 1 : alpha_value;
 
 			//read screen components - 15bpp
-			const uint16 rbs = (*dest) & 0x7b1f;
+			const uint16 rbs = (*dest) & 0x7c1f;
 			const uint16 gs =  (*dest) & 0x03e0;
 
 			// read image components - 15bpp
-			const uint16 rbi = (rgbmap_current[*src]) & 0x7b1f;
+			const uint16 rbi = (rgbmap_current[*src]) & 0x7c1f;
 			const uint16 gi =  (rgbmap_current[*src]) & 0x03e0;
 
 			// calculate and write destination components - 16bpp
 			const uint16 rbd = ((rbi * alpha_value) + (rbs * (32 - alpha_value))) >> 5;
 			const uint16 gd  = ((gi  * alpha_value) + (gs  * (32 - alpha_value))) >> 5;
-			*dest = (rbd & 0x7b1f) | (gd & 0x03e0);
+			*dest = (rbd & 0x7c1f) | (gd & 0x03e0);
 		}
 
 		dest++;
@@ -3436,7 +3436,7 @@ static void pix_alpha_recode_16(PIXVAL *dest, const PIXVAL *src, const PIXVAL *a
 
 	const uint16 rmask = alpha_flags & ALPHA_RED ? 0x001f : 0;
 	const uint16 gmask = alpha_flags & ALPHA_GREEN ? 0x03e0 : 0;
-	const uint16 bmask = alpha_flags & ALPHA_BLUE ? 0x7b00 : 0;
+	const uint16 bmask = alpha_flags & ALPHA_BLUE ? 0x7c00 : 0;
 
 	while(  dest < end  ) {
 		// read mask components - always 15bpp
@@ -4181,19 +4181,43 @@ int display_set_unicode(int use_unicode)
 }
 
 
-bool display_load_font(const char* fname)
+uint16 display_load_font(const char* fname)
 {
 	font_type fnt;
-	if (load_font(&fnt, fname)) {
-		free(large_font.screen_width);
-		free(large_font.char_data);
-		large_font = fnt;
-		large_font_ascent = large_font.height + large_font.descent;
-		large_font_total_height = large_font.height;
-		return true;
+
+	if(  fname == NULL  ) {
+		// reload last font
+		if(  load_font(&fnt, large_font.fname)  ) {
+			free(large_font.screen_width);
+			free(large_font.char_data);
+			large_font = fnt;
+			large_font_ascent = large_font.height + large_font.descent;
+			large_font_total_height = large_font.height;
+			return large_font.num_chars;
+		}
+		else {
+			return 0;
+		}
 	}
 	else {
-		return false;
+
+		// skip reloading if already in memory
+		if(  strcmp( large_font.fname, fname ) == 0  ) {
+			return large_font.num_chars;
+		}
+		tstrncpy( large_font.fname, fname, lengthof(large_font.fname) );
+
+		if(  load_font(&fnt, fname)  ) {
+			free(large_font.screen_width);
+			free(large_font.char_data);
+			large_font = fnt;
+			large_font_ascent = large_font.height + large_font.descent;
+			large_font_total_height = large_font.height;
+			return large_font.num_chars;
+		}
+		else {
+			return 0;
+		}
 	}
 }
 
@@ -4226,14 +4250,16 @@ long get_prev_char(const char* text, long pos)
 
 KOORD_VAL display_get_char_width(utf16 c)
 {
-	KOORD_VAL w = large_font.screen_width[c];
-	if(  w == 0  ) {
-		w = large_font.screen_width[0];
+	KOORD_VAL pixel_width;
+	if(  c >= large_font.num_chars  ||  (pixel_width = large_font.screen_width[c]) == 0  ) {
+		// default width for missing characters
+		return large_font.screen_width[0];
 	}
-	return w;
+	return pixel_width;
 }
 
 
+/* returns the width of this character or the default (Nr 0) character size */
 KOORD_VAL display_get_char_max_width(const char* text, size_t len) {
 
 	KOORD_VAL max_len=0;
@@ -4244,6 +4270,7 @@ KOORD_VAL display_get_char_max_width(const char* text, size_t len) {
 
 	return max_len;
 }
+
 
 /**
  * For the next logical character in the text, returns the character code
@@ -4277,6 +4304,17 @@ unsigned short get_next_char_with_metrics(const char* &text, unsigned char &byte
 		}
 	}
 	return char_code;
+}
+
+
+/* returns true, if this is a valid character */
+bool has_character( utf16 char_code )
+{
+	if(  char_code >= large_font.num_chars  ||  large_font.screen_width[char_code] == 0  ) {
+		// missing characters
+		return false;
+	}
+	return true;
 }
 
 
@@ -4488,7 +4526,9 @@ int display_text_proportional_len_clip_rgb(KOORD_VAL x, KOORD_VAL y, const char*
 		cB = disp_height;
 	}
 	// don't know len yet ...
-	if (len < 0) len = 0x7FFF;
+	if (len < 0) {
+		len = 0x7FFF;
+	}
 
 	// adapt x-coordinate for alignment
 	switch (flags & ( ALIGN_LEFT | ALIGN_CENTER_H | ALIGN_RIGHT) ) {
@@ -4553,8 +4593,8 @@ int display_text_proportional_len_clip_rgb(KOORD_VAL x, KOORD_VAL y, const char*
 			mask1 = get_h_mask(x, x + 8, cL, cR);
 			// we need to double mask 2, since only 2 Bits are used
 			mask2 = get_h_mask(x + 8, x + char_width_1, cL, cR);
-			mask2 &= 0xF0;
-		} else {
+		}
+		else {
 			// char_width_1<= 8: call directly
 			mask1 = get_h_mask(x, x + char_width_1, cL, cR);
 			mask2 = 0;
@@ -4564,59 +4604,33 @@ int display_text_proportional_len_clip_rgb(KOORD_VAL x, KOORD_VAL y, const char*
 		if(  y_offset>char_yoffset  ) {
 			char_yoffset = (uint8)y_offset;
 		}
-		screen_pos = (y+char_yoffset) * disp_width + x;
 
-		p = char_data + char_yoffset;
-		for (h = char_yoffset; h < char_height; h++) {
-			unsigned int dat = *p++ & mask1;
-			PIXVAL* dst = textur + screen_pos;
-
+		for(  int i=0;  i<2;  i++  ) {
+			p = char_data + char_yoffset + i*CHARACTER_HEIGHT;
+			const uint8 m =  i ? mask2 : mask1;
+			if(  m  ) {
+				screen_pos = (y+char_yoffset) * disp_width + x + i*8;
+				for (h = char_yoffset; h < char_height; h++) {
+					unsigned int dat = *p++ & m;
+					PIXVAL* dst = textur + screen_pos;
 #ifdef USE_C
-			if (dat != 0) {
-				if (dat & 0x80) dst[0] = color;
-				if (dat & 0x40) dst[1] = color;
-				if (dat & 0x20) dst[2] = color;
-				if (dat & 0x10) dst[3] = color;
-				if (dat & 0x08) dst[4] = color;
-				if (dat & 0x04) dst[5] = color;
-				if (dat & 0x02) dst[6] = color;
-				if (dat & 0x01) dst[7] = color;
-			}
+					if (dat != 0) {
+						if (dat & 0x80) dst[0] = color;
+						if (dat & 0x40) dst[1] = color;
+						if (dat & 0x20) dst[2] = color;
+						if (dat & 0x10) dst[3] = color;
+						if (dat & 0x08) dst[4] = color;
+						if (dat & 0x04) dst[5] = color;
+						if (dat & 0x02) dst[6] = color;
+						if (dat & 0x01) dst[7] = color;
+					}
 #else
-			// assemble variant of the above, using table and string instructions:
-			// optimized for long pipelines ...
-#			include "text_pixel.c"
+					// assemble variant of the above, using table and string instructions:
+					// optimized for long pipelines ...
+#					include "text_pixel.c"
 #endif
-			screen_pos += disp_width;
-		}
-
-		// extra four bits for over-width characters (up to 12 pixel supported for unicode)
-		if (char_width_1 > 8 && mask2 != 0) {
-			p = char_data + char_yoffset/2+12;
-			screen_pos = (y+char_yoffset) * disp_width + x + 8;
-			for (h = char_yoffset; h < char_height; h++) {
-				unsigned int char_dat = *p;
-				PIXVAL* dst = textur + screen_pos;
-				if(h&1) {
-					uint8 dat = (char_dat<<4) & mask2;
-					if (dat != 0) {
-						if (dat & 0x80) dst[0] = color;
-						if (dat & 0x40) dst[1] = color;
-						if (dat & 0x20) dst[2] = color;
-						if (dat & 0x10) dst[3] = color;
-					}
-					p++;
+					screen_pos += disp_width;
 				}
-				else {
-					uint8 dat = char_dat & mask2;
-					if (dat != 0) {
-						if (dat & 0x80) dst[0] = color;
-						if (dat & 0x40) dst[1] = color;
-						if (dat & 0x20) dst[2] = color;
-						if (dat & 0x10) dst[3] = color;
-					}
-				}
-				screen_pos += disp_width;
 			}
 		}
 		// next char: screen width
@@ -4637,8 +4651,8 @@ int display_text_proportional_len_clip_rgb(KOORD_VAL x, KOORD_VAL y, const char*
 
 
 /*
- * Display a string that if abreviated by the (language specific) ellipse character if too wide
- * If enoguh space is given, it just display the full string
+ * Displays a string which is abbreviated by the (language specific) ellipse character if too wide
+ * If enough space is given then it just displays the full string
  * @returns screen_width
  */
 KOORD_VAL display_proportional_ellipse_rgb( scr_rect r, const char *text, int align, const PIXVAL color, const bool dirty )
@@ -4661,6 +4675,8 @@ KOORD_VAL display_proportional_ellipse_rgb( scr_rect r, const char *text, int al
 		current_offset += pixel_width;
 		max_idx += byte_length;
 	}
+	size_t max_idx_before_ellipse = max_idx;
+	scr_coord_val max_offset_before_ellipse = current_offset;
 
 	// now check if the text would fit completely
 	if(  eclipse_width  &&  pixel_width > 0  ) {
@@ -4672,10 +4688,15 @@ KOORD_VAL display_proportional_ellipse_rgb( scr_rect r, const char *text, int al
 			current_offset += pixel_width;
 			max_idx += byte_length;
 		}
+		// if it does not fit
 		if(  max_screen_width <= (current_offset+pixel_width)  ) {
-			// this fits not!
-			KOORD_VAL w = display_text_proportional_len_clip_rgb( r.x, r.y, text, ALIGN_LEFT | DT_CLIP, color, dirty, max_idx );
-			w += display_text_proportional_len_clip_rgb( r.x+w, r.y, translator::translate("..."), ALIGN_LEFT | DT_CLIP, color, dirty, max_idx );
+			KOORD_VAL w = 0;
+			// since we know the length already, we try to center the text with the remaining pixels of the last character
+			if(  align & ALIGN_CENTER_H  ) {
+				w = (max_screen_width-max_offset_before_ellipse-eclipse_width)/2;
+			}
+			w += display_text_proportional_len_clip_rgb( r.x+w, r.y, text, ALIGN_LEFT | DT_CLIP, color, dirty, max_idx_before_ellipse );
+			w += display_text_proportional_len_clip_rgb( r.x+w, r.y, translator::translate("..."), ALIGN_LEFT | DT_CLIP, color, dirty, -1 );
 			return w;
 		}
 		else {

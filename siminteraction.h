@@ -47,15 +47,15 @@ private:
 	 */
 	void interactive_event(const event_t &ev);
 
+	bool is_dragging;
+
+public:
 	/**
 	 * Processes a single event.
 	 * @return true if we need to stop processing events.
 	 */
 	bool process_event( event_t &ev );
 
-	bool is_dragging;
-
-public:
 	/**
 	 * Processes all the pending system events.
 	 * @brief Message Pump

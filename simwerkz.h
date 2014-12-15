@@ -52,7 +52,7 @@ public:
 // remove uppermost object from tile
 class wkz_remover_t : public werkzeug_t {
 private:
-	bool wkz_remover_intern(spieler_t *sp, koord3d pos, const char *&msg);
+	bool wkz_remover_intern(spieler_t *sp, koord3d pos, sint8 type, const char *&msg);
 public:
 	wkz_remover_t() : werkzeug_t(WKZ_REMOVER | GENERAL_TOOL) {}
 	char const* get_tooltip(spieler_t const*) const OVERRIDE { return translator::translate("Abriss"); }
@@ -83,7 +83,7 @@ public:
 	bool is_init_network_save() const OVERRIDE { return true; }
 	/**
 	 * work() is only called when not dragging
-	 * if work() is called with is_dragging==true then is_dragging is reseted
+	 * if work() is called with is_dragging==true then is_dragging is reset
 	 */
 	bool is_work_network_save() const OVERRIDE { return is_dragging;}
 
@@ -199,6 +199,7 @@ public:
 	wkz_change_water_height_t() : werkzeug_t(WKZ_CHANGE_WATER_HEIGHT | GENERAL_TOOL) {}
 	char const* get_tooltip(spieler_t const*) const OVERRIDE { return translator::translate( atoi(default_param)>=0 ? "Increase water height" : "Decrease water height" ); }
 	bool init(spieler_t*) OVERRIDE;
+	image_id get_icon(spieler_t *sp) const OVERRIDE { return (!env_t::networkmode  ||  sp->get_player_nr()==1) ? icon : IMG_LEER; }
 	char const* work(spieler_t*, koord3d) OVERRIDE;
 	bool is_init_network_save() const OVERRIDE { return true; }
 };
@@ -299,6 +300,7 @@ public:
 	waytype_t get_waytype() const OVERRIDE;
 	bool remove_preview_necessary() const OVERRIDE { return !is_first_click(); }
 	void rdwr_custom_data(memory_rw_t*) OVERRIDE;
+	bool init(spieler_t*) OVERRIDE;
 };
 
 class wkz_tunnelbau_t : public two_click_werkzeug_t {
@@ -314,6 +316,7 @@ public:
 	bool is_init_network_save() const OVERRIDE { return true; }
 	waytype_t get_waytype() const OVERRIDE;
 	bool remove_preview_necessary() const OVERRIDE { return !is_first_click(); }
+	bool init(spieler_t*) OVERRIDE;
 };
 
 class wkz_wayremover_t : public two_click_werkzeug_t {

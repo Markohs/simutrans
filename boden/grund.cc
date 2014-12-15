@@ -85,13 +85,12 @@ uint8 grund_t::underground_mode = ugm_none;
  * Table of ground texts
  * @author Hj. Malthaner
  */
-static inthashtable_tpl<uint32, char*> ground_texts;
+static inthashtable_tpl<uint64, char*> ground_texts;
 
-// since size_x*size_y < 0x1000000, we have just to shift the high bits
-#define get_ground_text_key(k,width) ( ((k).x*(width)+(k).y) + ((k).z << 25) )
+#define get_ground_text_key(k) ( (uint64)(k).x + ((uint64)(k).y << 16) + ((uint64)(k).z << 32) )
 
 // and the reverse operation
-#define get_ground_koord3d_key(key,width) koord3d( ((key&0x01ffffff))/(width), ((key)&0x01ffffff)%(width), ((key)>>25) | ( (key&0x80000000ul) ? 0x80 : 0x00 ) )
+#define get_ground_koord3d_key(key) koord3d( (key) & 0x00007FFF, ((key)>>16) & 0x00007fff, (key)>>32 )
 
 void grund_t::set_text(const char *text)
 {
@@ -99,7 +98,7 @@ void grund_t::set_text(const char *text)
 		// no text to delete
 		return;
 	}
-	const uint32 n = get_ground_text_key(pos,welt->get_size().y);
+	const uint64 n = get_ground_text_key(pos);
 	if(  text  ) {
 		char *new_text = strdup(text);
 		free(ground_texts.remove(n));
@@ -120,7 +119,7 @@ const char *grund_t::get_text() const
 {
 	const char *result = 0;
 	if(  get_flag(has_text)  ) {
-		result = ground_texts.get( get_ground_text_key(pos,welt->get_size().y) );
+		result = ground_texts.get( get_ground_text_key(pos) );
 		if(result==NULL) {
 			return "undef";
 		}
@@ -132,7 +131,7 @@ const char *grund_t::get_text() const
 
 PLAYER_COLOR_VAL grund_t::text_farbe() const
 {
-	// if this gund belongs to a halt, the color should reflect the halt owner, not the grund owner!
+	// if this ground belongs to a halt, the color should reflect the halt owner, not the ground owner!
 	// Now, we use the color of label_t owner
 	if(is_halt()  &&  find<label_t>()==NULL) {
 		// only halt label
@@ -154,7 +153,7 @@ PLAYER_COLOR_VAL grund_t::text_farbe() const
 		}
 	}
 
-	return COL_WHITE;
+	return SYSCOL_TEXT_HIGHLIGHT;
 }
 
 
@@ -410,7 +409,7 @@ void grund_t::rdwr(loadsave_t *file)
 
 				if(weg) {
 					if(get_typ()==fundament) {
-						// remove this (but we can not correct the other wasy, since possibly not yet loaded)
+						// remove this (but we can not correct the other ways, since possibly not yet loaded)
 						dbg->error("grund_t::rdwr()","removing way from foundation at %i,%i",pos.x,pos.y);
 						// we do not delete them, to keep maintenance costs correct
 					}
@@ -442,7 +441,7 @@ void grund_t::rdwr(loadsave_t *file)
 			file->wr_obj_id(w->get_waytype());
 			w->rdwr(file);
 		}
-		file->wr_obj_id(-1);   // Ende der Wege
+		file->wr_obj_id(-1);   // Way end
 	}
 
 	// all objects on this tile
@@ -465,7 +464,7 @@ grund_t::grund_t(koord3d pos)
 {
 	this->pos = pos;
 	flags = 0;
-	set_bild(IMG_LEER);    // setzt   flags = dirty;
+	set_bild(IMG_LEER);    // set   flags = dirty;
 	back_bild_nr = 0;
 }
 
@@ -528,13 +527,13 @@ void grund_t::rotate90()
 // after processing the last tile, we recalculate the hashes of the ground texts
 void grund_t::finish_rotate90()
 {
-	typedef inthashtable_tpl<uint32, char*> text_map;
+	typedef inthashtable_tpl<uint64, char*> text_map;
 	text_map ground_texts_rotating;
 	// first get the old hashes
 	FOR(text_map, iter, ground_texts) {
-		koord3d k = get_ground_koord3d_key( iter.key, welt->get_size().y );
+		koord3d k = get_ground_koord3d_key( iter.key );
 		k.rotate90( welt->get_size().y-1 );
-		ground_texts_rotating.put( get_ground_text_key(k,welt->get_size().x), iter.value );
+		ground_texts_rotating.put( get_ground_text_key(k), iter.value );
 	}
 	ground_texts.clear();
 	// then transfer all rotated texts
@@ -545,14 +544,14 @@ void grund_t::finish_rotate90()
 }
 
 
-void grund_t::enlarge_map( sint16, sint16 new_size_y )
+void grund_t::enlarge_map( sint16, sint16 /*new_size_y*/ )
 {
-	typedef inthashtable_tpl<uint32, char*> text_map;
+	typedef inthashtable_tpl<uint64, char*> text_map;
 	text_map ground_texts_enlarged;
 	// we have recalculate the keys
 	FOR(text_map, iter, ground_texts) {
-		koord3d k = get_ground_koord3d_key( iter.key, welt->get_size().y );
-		ground_texts_enlarged.put( get_ground_text_key(k,new_size_y), iter.value );
+		koord3d k = get_ground_koord3d_key( iter.key );
+		ground_texts_enlarged.put( get_ground_text_key(k), iter.value );
 	}
 	ground_texts.clear();
 	// then transfer all texts back
@@ -750,8 +749,8 @@ void grund_t::mark_image_dirty()
 	}
 }
 
-// artifical walls from here on ...
-void grund_t::calc_back_bild(const sint8 hgt,const sint8 slope_this)
+// artificial walls from here on ...
+void grund_t::calc_back_bild(const sint8 hgt,const hang_t::typ slope_this)
 {
 	// full underground mode or not ground -> no back bild, no need for draw_as_obj
 	if(  underground_mode == ugm_all  ||  !ist_karten_boden()) {
@@ -763,22 +762,23 @@ void grund_t::calc_back_bild(const sint8 hgt,const sint8 slope_this)
 	// store corner heights sw, nw, ne scaled to screen dimensions
 	const sint16 scale_z_step = tile_raster_scale_y(TILE_HEIGHT_STEP,64);
 	const sint16 scale_y_step = 64/2;
-	sint16 corners[3] = {scale_z_step*(hgt + corner1(slope_this)),
-	                     scale_z_step*(hgt + corner4(slope_this)),
-	                     scale_z_step*(hgt + corner3(slope_this))};
+	sint16 corners[3] = {(sint16)(scale_z_step*(hgt + corner1(slope_this))),
+	                     (sint16)(scale_z_step*(hgt + corner4(slope_this))),
+	                     (sint16)(scale_z_step*(hgt + corner3(slope_this)))};
 	sint16 corners_add[3] = {0,0,0}; // extra height of possible back-image
 
 	// now calculate back image
 	sint8 back_bild_nr=0;
 	bool is_building = get_typ()==grund_t::fundament;
 	const bool isvisible = is_visible();
-	bool fence[2]={false, false};
+	bool fence[2] = {false, false};
 	const koord k = get_pos().get_2d();
 
 	clear_flag(grund_t::draw_as_obj);
 	weg_t const* w;
-	if (((w = get_weg_nr(0)) && w->get_besch()->is_draw_as_obj()) ||
-			((w = get_weg_nr(1)) && w->get_besch()->is_draw_as_obj())) {
+	if(  (  (w = get_weg_nr(0))  &&  w->get_besch()->is_draw_as_obj()  )  ||
+			(  (w = get_weg_nr(1))  &&  w->get_besch()->is_draw_as_obj()  )
+	  ) {
 		set_flag(grund_t::draw_as_obj);
 	}
 
@@ -860,7 +860,7 @@ void grund_t::calc_back_bild(const sint8 hgt,const sint8 slope_this)
 	const koord  testdir[3] = { koord(-1,0), koord(-1,-1), koord(0,-1) };
 
 	for(int step = 0; step<5  &&  !get_flag(draw_as_obj); step ++) {
-		sint16 test[3] = {corners[0]+1, corners[1]+1, corners[2]+1};
+		sint16 test[3] = {(sint16)(corners[0]+1), (sint16)(corners[1]+1), (sint16)(corners[2]+1)};
 		for(int i=0; i<=2; i++) {
 			if(  const grund_t *gr=welt->lookup_kartenboden(k + testdir[i] - koord(1,1)*step)  ) {
 				sint16 h = gr->get_disp_height()*scale_z_step;
@@ -953,7 +953,7 @@ void grund_t::display_boden(const sint16 xpos, const sint16 ypos, const sint16 r
 					continue;
 				}
 
-				sint8 yoff = tile_raster_scale_y( -TILE_HEIGHT_STEP*back_height, raster_tile_width );
+				sint16 yoff = tile_raster_scale_y( -TILE_HEIGHT_STEP*back_height, raster_tile_width );
 				if(  back_bild[i]  ) {
 					grund_t *gr = welt->lookup_kartenboden( k + koord::nsow[(i-1)&3] );
 					if(  gr  ) {
@@ -970,7 +970,11 @@ void grund_t::display_boden(const sint16 xpos, const sint16 ypos, const sint16 r
 
 						sint16 hgt_diff = gr->get_disp_height() - get_disp_height() + min( corner_a, corner_b ) - back_height;
 						while(  hgt_diff > 2  ||  (hgt_diff > 0  &&  corner_a != corner_b)  ) {
-							display_normal( sl_draw->get_bild( 4+4*(hgt_diff>1)+11*i ), xpos, ypos + yoff, 0, true, dirty CLIP_NUM_PAR );
+							uint16 img_index = 22+(hgt_diff>1)+2*i;
+							if( sl_draw->get_bild( img_index ) == IMG_LEER ) {
+								img_index = 4+4*(hgt_diff>1)+11*i;
+							}
+							display_normal( sl_draw->get_bild( img_index ), xpos, ypos + yoff, 0, true, dirty CLIP_NUM_PAR );
 							yoff     -= tile_raster_scale_y( TILE_HEIGHT_STEP * (hgt_diff > 1 ? 2 : 1), raster_tile_width );
 							hgt_diff -= 2;
 						}
@@ -1400,7 +1404,7 @@ void grund_t::display_obj_all(const sint16 xpos, const sint16 ypos, const sint16
 		return;
 	}
 
-	// ships might be larg and could be clipped by vertical walls on our tile
+	// ships might be large and could be clipped by vertical walls on our tile
 	const bool ontile_se = back_bild_nr  &&  ist_wasser();
 
 	// get slope of way as displayed
@@ -1659,7 +1663,7 @@ ribi_t::ribi grund_t::get_weg_ribi_unmasked(waytype_t typ) const
 
 
 /**
-* Falls es hier ein Depot gibt, dieses zurueckliefern
+* If there's a depot here, return this
 * @author Volker Meyer
 */
 depot_t* grund_t::get_depot() const
@@ -1710,7 +1714,7 @@ sint64 grund_t::remove_trees()
 	sint64 cost=0;
 	// remove all trees ...
 	while (baum_t* const d = find<baum_t>(0)) {
-		// we must mark it by hand, sinc ewe want to join costs
+		// we must mark it by hand, since we want to join costs
 		d->mark_image_dirty( get_bild(), 0 );
 		delete d;
 		cost -= welt->get_settings().cst_remove_tree;
@@ -1812,7 +1816,7 @@ sint32 grund_t::weg_entfernen(waytype_t wegtyp, bool ribi_rem)
 			flags &= ~has_way2;
 
 			// reset speed limit/crossing info (maybe altered by crossing)
-			// Not all ways (i.e. with styp==7) will imply crossins, so wie hav to check
+			// Not all ways (i.e. with styp==7) will imply crossings, so we have to check
 			crossing_t* cr = find<crossing_t>(1);
 			if(cr) {
 				cr->entferne(0);
@@ -1836,7 +1840,7 @@ sint32 grund_t::weg_entfernen(waytype_t wegtyp, bool ribi_rem)
 }
 
 
-// this funtion is called many many times => make it as fast as possible
+// this function is called many many times => make it as fast as possible
 // i.e. no reverse lookup of ribis from koord
 bool grund_t::get_neighbour(grund_t *&to, waytype_t type, ribi_t::ribi ribi) const
 {
@@ -1904,7 +1908,7 @@ bool grund_t::remove_everything_from_way(spieler_t* sp, waytype_t wt, ribi_t::ri
 		waytype_t finance_wt = weg->get_besch()->get_finance_waytype();
 		const koord here = pos.get_2d();
 
-		// stopps
+		// stops
 		if(flags&is_halt_flag  &&  (get_halt()->get_besitzer()==sp  || sp==welt->get_spieler(1))) {
 			bool remove_halt = get_typ()!=boden;
 			// remove only if there is no other way
@@ -1956,13 +1960,15 @@ bool grund_t::remove_everything_from_way(spieler_t* sp, waytype_t wt, ribi_t::ri
 					costs -= sign->get_besch()->get_preis();
 					delete sign;
 				}
-			} else if (signal_t* const signal = obj_cast<signal_t>(obj)) {
+			}
+			else if (signal_t* const signal = obj_cast<signal_t>(obj)) {
 				// signal: not on crossings => remove all
 				if (signal->get_besch()->get_wtyp() == wt) {
 					costs -= signal->get_besch()->get_preis();
 					delete signal;
 				}
-			} else if (wayobj_t* const wayobj = obj_cast<wayobj_t>(obj)) {
+			}
+			else if (wayobj_t* const wayobj = obj_cast<wayobj_t>(obj)) {
 				// wayobj: check dir
 				if (add == ribi_t::keine && wayobj->get_besch()->get_wtyp() == wt) {
 					uint8 new_dir=wayobj->get_dir()&add;
@@ -1975,13 +1981,16 @@ bool grund_t::remove_everything_from_way(spieler_t* sp, waytype_t wt, ribi_t::ri
 						delete wayobj;
 					}
 				}
-			} else if (stadtauto_t* const citycar = obj_cast<stadtauto_t>(obj)) {
+			}
+			else if (stadtauto_t* const citycar = obj_cast<stadtauto_t>(obj)) {
 				// citycar: just delete
 				if (wt == road_wt) delete citycar;
-			} else if (fussgaenger_t* const pedestrian = obj_cast<fussgaenger_t>(obj)) {
+			}
+			else if (fussgaenger_t* const pedestrian = obj_cast<fussgaenger_t>(obj)) {
 				// pedestrians: just delete
 				if (wt == road_wt) delete pedestrian;
-			} else if (tunnel_t* const tunnel = obj_cast<tunnel_t>(obj)) {
+			}
+			else if (tunnel_t* const tunnel = obj_cast<tunnel_t>(obj)) {
 				// remove tunnel portal, if not the last tile ...
 				// must be done before weg_entfernen() to get maintenance right
 				uint8 wt = tunnel->get_besch()->get_waytype();
@@ -2002,7 +2011,7 @@ bool grund_t::remove_everything_from_way(spieler_t* sp, waytype_t wt, ribi_t::ri
 			}
 		}
 
-		// need to remove railblocks to recalcualte connections
+		// need to remove railblocks to recalculate connections
 		// remove all ways or just some?
 		if(add==ribi_t::keine) {
 			costs -= weg_entfernen(wt, true);

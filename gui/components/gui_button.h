@@ -15,6 +15,7 @@
 #include "gui_action_creator.h"
 #include "gui_komponente.h"
 #include "../../simcolor.h"
+#include "../../dataobj/koord.h"
 #include "../../display/simimg.h"
 
 
@@ -26,7 +27,7 @@
  */
 class button_t :
 	public gui_action_creator_t,
-	public gui_komponente_t
+	public gui_component_t
 {
 
 public:
@@ -34,9 +35,9 @@ public:
 	 * the _state buttons must be changed by the caller!
 	 * _automatic buttons do everything themselves, i.e. depress/release alternately
 	 *
-	 * square:        button with text on the right side next to it
-	 * box:           button with is used for many selection purposes; can have colored background
-	 * roundbox:      button for "load" cancel and such options
+	 * square:        a checkbox with text on the right side next to it
+	 * box:           button which is used for many selection purposes, can have colored background
+	 * roundbox:      button for "load", "cancel" and such options
 	 * arrow-buttons: buttons with arrows, cannot have text
 	 * repeat arrows: calls the caller until the mouse is released
 	 * scrollbar:     well you guess it. Not used by gui_frame_t things ...
@@ -53,7 +54,7 @@ protected:
 	 * the extended init() version for buttons.
 	 * @author Max Kielland
 	 */
-	using gui_komponente_t::init;
+	using gui_component_t::init;
 
 private:
 	/**
@@ -150,7 +151,7 @@ public:
 	bool enabled() { return b_enabled; }
 
 	// Knightly : a button can only be focusable when it is enabled
-	virtual bool is_focusable() { return b_enabled && gui_komponente_t::is_focusable(); }
+	virtual bool is_focusable() { return b_enabled && gui_component_t::is_focusable(); }
 
 	void update_focusability();
 

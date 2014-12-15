@@ -16,10 +16,10 @@
 
 
 #ifdef _WIN32
-#	define WIN32_LEAN_AND_MEAN
 #	include <direct.h>
 #	include <windows.h>
 #	include <shellapi.h>
+#	include <shlobj.h>
 #	define PATH_MAX MAX_PATH
 #else
 #	include <limits.h>
@@ -55,8 +55,6 @@ bool dr_movetotrash(const char *path) {
 	strcpy(wfilename, path);
 
 	// Double \0 terminated string as required by the function.
-
-	wfilename[len]='\0';
 	wfilename[len+1]='\0';
 
 	ZeroMemory(&FileOp, sizeof(SHFILEOPSTRUCTA));
@@ -111,6 +109,27 @@ char const* dr_query_homedir()
 	dr_mkdir(b2);
 
 	return buffer;
+}
+
+
+const char *dr_query_fontpath( const char *fontname )
+{
+#if defined _WIN32
+	static char buffer[PATH_MAX];
+
+	if(  SHGetFolderPathA(NULL, CSIDL_FONTS, NULL, SHGFP_TYPE_CURRENT, buffer)  ) {
+		strcpy( buffer, "C:\\Windows\\Fonts" );
+	}
+	strcat( buffer, "\\" );
+	strcat( buffer, fontname );
+	return buffer;
+#elif defined __APPLE__
+	// not implemented yet
+	return fontname;
+#else
+	// seems non-trivial to work on any system ...
+	return fontname;
+#endif
 }
 
 
@@ -586,10 +605,9 @@ const char *dr_get_locale_string()
 {
 	static char code[4];
 	BMessage result;
-	BLocaleRoster bl;
 	const char *str;
 	code[0] = 0;
-	if(  B_OK == bl.GetPreferredLanguages( &result )  ) {
+	if(  B_OK == BLocaleRoster::Default()->GetPreferredLanguages( &result )  ) {
 		result.FindString( (const char *)"language", &str );
 		for(  int i=0;  i<lengthof(code)-1  &&  isalpha(str[i]);  i++  ) {
 			code[i] = tolower(str[i]);

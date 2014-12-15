@@ -8,6 +8,7 @@
 #include "dataobj/fahrplan.h"
 #include "dataobj/translator.h"
 #include "dataobj/loadsave.h"
+#include "gui/gui_theme.h"
 #include "player/simplay.h"
 #include "player/finance.h" // convert_money
 #include "vehicle/simvehikel.h"
@@ -75,6 +76,22 @@ simline_t::~simline_t()
 	delete fpl;
 	self.detach();
 	DBG_MESSAGE("simline_t::~simline_t()", "line %d (%p) destroyed", self.get_id(), this);
+}
+
+
+simline_t::linetype simline_t::get_linetype(const waytype_t wt)
+{
+	switch (wt) {
+		case road_wt: return simline_t::truckline;
+		case track_wt: return simline_t::trainline;
+		case water_wt: return simline_t::shipline;
+		case monorail_wt: return simline_t::monorailline;
+		case maglev_wt: return simline_t::maglevline;
+		case tram_wt: return simline_t::tramline;
+		case narrowgauge_wt: return simline_t::narrowgaugeline;
+		case air_wt: return simline_t::airline;
+		default: return simline_t::MAX_LINE_TYPE;
+	}
 }
 
 
@@ -373,7 +390,7 @@ void simline_t::recalc_status()
 {
 	if(financial_history[0][LINE_CONVOIS]==0) {
 		// noconvois assigned to this line
-		state_color = COL_WHITE;
+		state_color = SYSCOL_TEXT_HIGHLIGHT;
 		withdraw = false;
 	}
 	else if(financial_history[0][LINE_PROFIT]<0) {
@@ -396,7 +413,7 @@ void simline_t::recalc_status()
 	}
 	else {
 		// normal state
-		state_color = COL_BLACK;
+		state_color = SYSCOL_TEXT;
 	}
 }
 

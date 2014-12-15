@@ -36,7 +36,7 @@ scenario_info_t::scenario_info_t() :
 	tabs.add_tab(&scrolly_rule, translator::translate("Scenario Rules"));
 	tabs.add_tab(&scrolly_result, translator::translate("Scenario Result"));
 	tabs.add_tab(&scrolly_about, translator::translate("About scenario"));
-	add_komponente(&tabs);
+	add_component(&tabs);
 	tabs.add_listener(this);
 
 	// fetch texts
@@ -50,10 +50,9 @@ scenario_info_t::scenario_info_t() :
 
 	// add debug panel
 	tabs.add_tab(&scrolly_debug, translator::translate("Scenario Debug"));
-	debug_msg.set_text( welt->get_scenario()->get_forbidden_text() );
 
-	set_windowsize(scr_size(300, D_TITLEBAR_HEIGHT + TAB_HEADER_V_SIZE+250));
-	set_min_windowsize(scr_size(40,  D_TITLEBAR_HEIGHT + TAB_HEADER_V_SIZE+10));
+	set_windowsize(scr_size(500, D_TITLEBAR_HEIGHT + D_TAB_HEADER_HEIGHT+300));
+	set_min_windowsize(scr_size(40,  D_TITLEBAR_HEIGHT + D_TAB_HEADER_HEIGHT+10));
 
 	scr_coord pane_pos(D_MARGIN_LEFT, D_MARGIN_TOP);
 	gui_flowtext_t *texts[] = { &info, &goal, &rule, &result, &about, &error, &debug_msg};
@@ -108,6 +107,7 @@ void scenario_info_t::update_scenario_texts(bool init)
 	update_dynamic_texts( rule, scen->rule_text, border_size, init);
 	update_dynamic_texts( about, scen->about_text, border_size, init);
 	update_dynamic_texts( result, scen->result_text, border_size, init);
+	update_dynamic_texts( debug_msg, scen->debug_text, border_size, init);
 }
 
 void scenario_info_t::draw(scr_coord pos, scr_size size)
@@ -116,12 +116,12 @@ void scenario_info_t::draw(scr_coord pos, scr_size size)
 	gui_frame_t::draw(pos, size);
 }
 
-bool scenario_info_t::action_triggered( gui_action_creator_t *komp, value_t v)
+bool scenario_info_t::action_triggered( gui_action_creator_t *comp, value_t v)
 {
-	if (komp == &tabs) {
+	if (  comp == &tabs  ) {
 		set_dirty();
 	}
-	if (komp == &info  ||  komp == &goal  ||  komp ==  &rule  ||  komp ==  &result  ||  komp == &about) {
+	if (  comp == &info  ||  comp == &goal  ||  comp ==  &rule  ||  comp ==  &result  ||  comp == &about  ||  comp == &debug_msg  ) {
 		// parse hyperlink
 		const char *link = (const char*)v.p;
 		if (link  && *link) {

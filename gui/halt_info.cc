@@ -99,64 +99,67 @@ halt_info_t::halt_info_t(halthandle_t halt) :
 	this->halt = halt;
 	halt->set_sortby( env_t::default_sortmode );
 
-	const sint16 offset_below_viewport = 21 + view.get_size().h;
+	const sint16 offset_below_viewport = D_MARGIN_TOP + D_BUTTON_HEIGHT + D_V_SPACE + view.get_size().h;
 	const sint16 total_width = D_MARGIN_LEFT + 3*(D_BUTTON_WIDTH + D_H_SPACE) + max( D_BUTTON_WIDTH, view.get_size().w ) + D_MARGIN_RIGHT;
 
 	input.set_pos(scr_coord(10,4));
 	tstrncpy(edit_name, halt->get_name(), lengthof(edit_name));
 	input.set_text(edit_name, lengthof(edit_name));
 	input.add_listener(this);
-	add_komponente(&input);
+	add_component(&input);
 
-	add_komponente(&view);
+	add_component(&view);
 
 	// chart
 	chart.set_pos(scr_coord(66,offset_below_viewport+2));
 	chart.set_size(scr_size(total_width-66-10, 100));
 	chart.set_dimension(12, 10000);
 	chart.set_visible(false);
-	chart.set_background(MN_GREY1);
+	chart.set_background(SYSCOL_CHART_BACKGROUND);
+	const sint16 offset_below_chart = chart.get_pos().y + 100 +
+	                                  +6+LINESPACE+D_V_SPACE; // chart x-axis labels plus space
 	for (int cost = 0; cost<MAX_HALT_COST; cost++) {
 		chart.add_curve(cost_type_color[cost], halt->get_finance_history(), MAX_HALT_COST, index_of_haltinfo[cost], MAX_MONTHS, 0, false, true, 0);
 		filterButtons[cost].init(button_t::box_state, cost_type[cost],
-			scr_coord(BUTTON1_X+(D_BUTTON_WIDTH+D_H_SPACE)*(cost%4), view.get_size().h+141+(D_BUTTON_HEIGHT+2)*(cost/4) ),
+			scr_coord(BUTTON1_X+(D_BUTTON_WIDTH+D_H_SPACE)*(cost%4), offset_below_chart+(D_BUTTON_HEIGHT+2)*(cost/4) ),
 			scr_size(D_BUTTON_WIDTH, D_BUTTON_HEIGHT));
 		filterButtons[cost].add_listener(this);
 		filterButtons[cost].background_color = cost_type_color[cost];
 		filterButtons[cost].set_visible(false);
 		filterButtons[cost].pressed = false;
-		add_komponente(filterButtons + cost);
+		add_component(filterButtons + cost);
 	}
-	add_komponente(&chart);
+	add_component(&chart);
+	chart_total_size = filterButtons[MAX_HALT_COST-1].get_pos().y + D_BUTTON_HEIGHT + D_V_SPACE - (chart.get_pos().y - 13);
 
-	add_komponente(&sort_label);
+	add_component(&sort_label);
 
-	const sint16 yoff = offset_below_viewport+D_BUTTON_HEIGHT+1-D_BUTTON_HEIGHT-2;
+	const sint16 yoff = offset_below_viewport + D_V_SPACE;
 
 	// hsiegeln: added sort_button
 	sort_button.init(button_t::roundbox, sort_text[env_t::default_sortmode],scr_coord(BUTTON1_X, yoff), scr_size(D_BUTTON_WIDTH, D_BUTTON_HEIGHT));
 	sort_button.set_tooltip("Sort waiting list by");
 	sort_button.add_listener(this);
-	add_komponente(&sort_button);
+	add_component(&sort_button);
 
 	toggler_departures.init( button_t::roundbox_state, "Departure board", scr_coord( BUTTON2_X, yoff ), scr_size( D_BUTTON_WIDTH, D_BUTTON_HEIGHT ) );
 	toggler_departures.set_tooltip("Show/hide estimated arrival times");
 	toggler_departures.add_listener( this );
-	add_komponente( &toggler_departures );
+	add_component( &toggler_departures );
 
 	toggler.init(button_t::roundbox_state, "Chart", scr_coord(BUTTON3_X, yoff), scr_size(D_BUTTON_WIDTH, D_BUTTON_HEIGHT));
 	toggler.set_tooltip("Show/hide statistics");
 	toggler.add_listener(this);
-	add_komponente(&toggler);
+	add_component(&toggler);
 
 	button.init(button_t::roundbox, "Details", scr_coord(BUTTON4_X, yoff), scr_size(D_BUTTON_WIDTH, D_BUTTON_HEIGHT));
 	button.set_tooltip("Open station/stop details");
 	button.add_listener(this);
-	add_komponente(&button);
+	add_component(&button);
 
-	scrolly.set_pos(scr_coord(0, offset_below_viewport+D_BUTTON_HEIGHT+3));
+	scrolly.set_pos(scr_coord(D_MARGIN_LEFT, yoff + D_BUTTON_HEIGHT + D_V_SPACE ));
 	scrolly.set_show_scroll_x(true);
-	add_komponente(&scrolly);
+	add_component(&scrolly);
 
 	set_windowsize(scr_size(total_width, view.get_size().h+208+D_SCROLLBAR_HEIGHT));
 	set_min_windowsize(scr_size(total_width, view.get_size().h+131+D_SCROLLBAR_HEIGHT));
@@ -285,7 +288,7 @@ void halt_info_t::draw(scr_coord pos, scr_size size)
 		info_buf.printf("%s: %u", translator::translate("Storage capacity"), halt->get_capacity(0));
 		left = pos.x+10;
 		// passengers
-		left += display_proportional(left, top, info_buf, ALIGN_LEFT, COL_BLACK, true);
+		left += display_proportional(left, top, info_buf, ALIGN_LEFT, SYSCOL_TEXT, true);
 		if (welt->get_settings().is_separate_halt_capacities()) {
 			// here only for separate capacities
 			display_color_img(skinverwaltung_t::passagiere->get_bild_nr(0), left, top, 0, false, false);
@@ -293,13 +296,13 @@ void halt_info_t::draw(scr_coord pos, scr_size size)
 			// post
 			info_buf.clear();
 			info_buf.printf(",  %u", halt->get_capacity(1));
-			left += display_proportional(left, top, info_buf, ALIGN_LEFT, COL_BLACK, true);
+			left += display_proportional(left, top, info_buf, ALIGN_LEFT, SYSCOL_TEXT, true);
 			display_color_img(skinverwaltung_t::post->get_bild_nr(0), left, top, 0, false, false);
 			left += 10;
 			// goods
 			info_buf.clear();
 			info_buf.printf(",  %u", halt->get_capacity(2));
-			left += display_proportional(left, top, info_buf, ALIGN_LEFT, COL_BLACK, true);
+			left += display_proportional(left, top, info_buf, ALIGN_LEFT, SYSCOL_TEXT, true);
 			display_color_img(skinverwaltung_t::waren->get_bild_nr(0), left, top, 0, false, false);
 			left = 53+LINESPACE;
 		}
@@ -308,7 +311,7 @@ void halt_info_t::draw(scr_coord pos, scr_size size)
 		// information about the passengers happiness
 		info_buf.clear();
 		halt->info(info_buf);
-		display_multiline_text(pos.x+10, pos.y+53+LINESPACE, info_buf, COL_BLACK);
+		display_multiline_text( pos.x+10, pos.y+53+LINESPACE, info_buf, SYSCOL_TEXT );
 	}
 }
 
@@ -317,7 +320,7 @@ void halt_info_t::draw(scr_coord pos, scr_size size)
 void halt_info_t::show_hide_statistics( bool show )
 {
 	toggler.pressed = show;
-	const scr_coord offset = show ? scr_coord(0, 165) : scr_coord(0, -165);
+	const scr_coord offset = show ? scr_coord(0, chart_total_size) : scr_coord(0, -chart_total_size);
 	set_min_windowsize(get_min_windowsize() + offset);
 	scrolly.set_pos(scrolly.get_pos() + offset);
 	chart.set_visible(show);
@@ -563,12 +566,12 @@ void halt_info_t::set_windowsize(scr_size size)
 
 	scrolly.set_size(get_client_windowsize()-scrolly.get_pos());
 
-	const sint16 yoff = scrolly.get_pos().y-D_BUTTON_HEIGHT-3;
+	const sint16 yoff = scrolly.get_pos().y-D_BUTTON_HEIGHT-D_V_SPACE;
 	sort_button.set_pos(scr_coord(BUTTON1_X,yoff));
 	toggler_departures.set_pos(scr_coord(BUTTON2_X,yoff));
 	toggler.set_pos(scr_coord(BUTTON3_X,yoff));
 	button.set_pos(scr_coord(BUTTON4_X,yoff));
-	sort_label.set_pos(scr_coord(10,yoff-LINESPACE-1));
+	sort_label.set_pos(scr_coord(10,yoff-LINESPACE-D_V_SPACE));
 }
 
 

@@ -69,9 +69,9 @@ int display_set_unicode(int)
 	return false;
 }
 
-bool display_load_font(const char*)
+uint16 display_load_font(const char*)
 {
-	return true;
+	return 1;
 }
 
 sint16 display_get_width()
@@ -213,7 +213,7 @@ void display_base_img(const unsigned, KOORD_VAL, KOORD_VAL, const signed char, c
 {
 }
 
-void display_fit_img_to_width( const image_id n, sint16 new_w )
+void display_fit_img_to_width( const image_id, sint16)
 {
 }
 
@@ -335,6 +335,11 @@ unsigned short get_next_char_with_metrics(const char* &, unsigned char &, unsign
 unsigned short get_prev_char_with_metrics(const char* &, const char *const, unsigned char &, unsigned char &)
 {
 	return 0;
+}
+
+bool has_character( utf16 )
+{
+	return false;
 }
 
 size_t display_fit_proportional(const char *, scr_coord_val, scr_coord_val)

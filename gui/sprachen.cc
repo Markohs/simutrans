@@ -41,20 +41,27 @@ int sprachengui_t::cmp_language_button(sprachengui_t::language_button_t a, sprac
 void sprachengui_t::init_font_from_lang()
 {
 	static const char *default_name = "PROP_FONT_FILE";
-	const char * prop_font_file = translator::translate(default_name);
+	const char *prop_font_file = translator::translate(default_name);
 
 	// Hajo: fallback if entry is missing
 	// -> use latin-1 font
-	if(prop_font_file == default_name) {
+	if(  prop_font_file == default_name  ) {
 		prop_font_file = "prop.fnt";
 	}
 
 	// load large font
-	char prop_font_file_name [1024];
-	sprintf(prop_font_file_name, "%s%s", FONT_PATH_X, prop_font_file);
-	chdir(env_t::program_dir);
-	display_load_font(prop_font_file_name);
-	chdir(env_t::user_dir);
+	chdir( env_t::program_dir );
+	chdir( FONT_PATH );
+	bool ok = false;
+	char prop_font_file_name[1024];
+	tstrncpy( prop_font_file_name, prop_font_file, lengthof(prop_font_file_name) );
+	char *f = strtok( prop_font_file_name, ";" );
+	do {
+		ok = display_load_font(prop_font_file_name);
+		f = strtok( NULL, ";" );
+	}
+	while(  !ok  &&  f  );
+	chdir( env_t::user_dir );
 
 	const char * p = translator::translate("SEP_THOUSAND");
 	char c = ',';
@@ -94,21 +101,24 @@ sprachengui_t::sprachengui_t() :
 
 	flags.enable_offset_removal(true);
 	flags.set_pos( scr_coord(L_DIALOG_WIDTH-D_MARGIN_RIGHT-flags.get_size().w, cursor.y) );
-	add_komponente( &flags);
+	add_component( &flags);
 
 	buf.clear();
 	buf.append(translator::translate("LANG_CHOOSE\n"));
 	text_label.set_pos( cursor );
 	text_label.set_buf(&buf); // force recalculation of size (size)
-	add_komponente( &text_label );
+	add_component( &text_label );
 	cursor.y += text_label.get_size().h;
 
 	seperator.set_pos( cursor );
 	seperator.set_width( L_DIALOG_WIDTH-D_MARGINS_X-D_H_SPACE-flags.get_size().w );
-	add_komponente( &seperator );
+	add_component( &seperator );
 	cursor.y = max( seperator.get_pos().y + D_DIVIDER_HEIGHT, flags.get_pos().y + flags.get_size().h);
 
 	const translator::lang_info* lang = translator::get_langs();
+	chdir( env_t::program_dir );
+	chdir( FONT_PATH );
+
 	for (int i = 0; i < translator::get_language_count(); ++i, ++lang) {
 		button_t* b = new button_t();
 
@@ -117,30 +127,25 @@ sprachengui_t::sprachengui_t() :
 		b->set_no_translate(true);
 
 		// check, if font exists
-		chdir(env_t::program_dir);
-		const char* fontname = lang->translate("PROP_FONT_FILE");
-		char prop_font_file_name [1024];
-		sprintf(prop_font_file_name, "%s%s", FONT_PATH_X, fontname);
-		bool ok = true;
+		uint16 num_loaded = false;
+		char prop_font_file_name[1024];
+		tstrncpy( prop_font_file_name, lang->translate("PROP_FONT_FILE"), lengthof(prop_font_file_name) );
+		char *f = strtok( prop_font_file_name, ";" );
+		do {
+			num_loaded = display_load_font(prop_font_file_name);
+			f = strtok( NULL, ";" );
+		}
+		while(  !num_loaded  &&  f  );
 
-		font_type fnt;
-		fnt.screen_width = NULL;
-		fnt.char_data = NULL;
-		if(  *fontname == 0  ||  !load_font(&fnt,prop_font_file_name)  ) {
-			ok = false;
-		}
-		else {
-			if(  lang->utf_encoded  &&  fnt.num_chars <= 256  ) {
-				dbg->warning( "sprachengui_t::sprachengui_t()", "Unicode language %s needs BDF fonts with most likely more than 256 characters!", lang->name );
-			}
-			free(fnt.screen_width);
-			free(fnt.char_data);
-		}
 		// now we know this combination is working
-		if(ok) {
+		if(num_loaded) {
 			// only listener for working languages ...
 			b->add_listener(this);
-		} else {
+			if(  lang->utf_encoded  &&  num_loaded <= 256  ) {
+				dbg->warning( "sprachengui_t::sprachengui_t()", "Unicode language %s needs BDF fonts with most likely more than 256 characters!", lang->name );
+			}
+		}
+		else {
 			dbg->warning("sprachengui_t::sprachengui_t()", "no font found for %s", lang->name);
 			b->disable();
 		}
@@ -161,14 +166,13 @@ sprachengui_t::sprachengui_t() :
 	// now set position
 	const uint32 count = buttons.get_count();
 	const scr_coord_val width = ((L_DIALOG_WIDTH - D_MARGINS_X - D_H_SPACE) >> 1);
-	for(uint32 i=0; i<count; i++)
-	{
+	for(uint32 i=0; i<count; i++) {
 		const bool right = (2*i >= count);
 		const scr_coord_val x = cursor.x + (right ? width + D_H_SPACE : 0);
 		const scr_coord_val y = cursor.y + (max(D_CHECKBOX_HEIGHT, LINESPACE) + D_V_SPACE) * (right ? i - (count + 1) / 2: i);
 		buttons[i].button->set_pos( scr_coord( x, y + D_V_SPACE ) );
 		buttons[i].button->set_width( width );
-		add_komponente( buttons[i].button );
+		add_component( buttons[i].button );
 	}
 
 	chdir(env_t::user_dir);
@@ -193,4 +197,11 @@ bool sprachengui_t::action_triggered( gui_action_creator_t *komp, value_t)
 
 	}
 	return true;
+}
+
+
+sprachengui_t::~sprachengui_t()
+{
+	// reload font
+	sprachengui_t::init_font_from_lang();
 }

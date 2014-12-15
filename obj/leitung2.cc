@@ -123,7 +123,6 @@ leitung_t::~leitung_t()
 		gr->obj_remove(this);
 		set_flag( obj_t::not_on_map );
 
-		powernet_t *new_net = NULL;
 		if(neighbours>1) {
 			// only reconnect if two connections ...
 			bool first = true;
@@ -131,7 +130,7 @@ leitung_t::~leitung_t()
 				if(conn[i]!=NULL) {
 					if(!first) {
 						// replace both nets
-						new_net = new powernet_t();
+						powernet_t *new_net = new powernet_t();
 						conn[i]->replace(new_net);
 					}
 					first = false;
@@ -431,6 +430,17 @@ void leitung_t::rdwr(loadsave_t *file)
 }
 
 
+// returns NULL, if removal is allowed
+// players can remove public owned powerlines
+const char *leitung_t::ist_entfernbar(const spieler_t *sp)
+{
+	if(  get_player_nr()==1  &&  sp  ) {
+		return NULL;
+	}
+	return obj_t::ist_entfernbar(sp);
+}
+
+
 /************************************ from here on pump (source) stuff ********************************************/
 
 slist_tpl<pumpe_t *> pumpe_t::pumpe_list;
@@ -442,7 +452,7 @@ void pumpe_t::neue_karte()
 }
 
 
-void pumpe_t::step_all(long delta_t)
+void pumpe_t::step_all(uint32 delta_t)
 {
 	FOR(slist_tpl<pumpe_t*>, const p, pumpe_list) {
 		p->step(delta_t);
@@ -477,7 +487,7 @@ pumpe_t::~pumpe_t()
 }
 
 
-void pumpe_t::step(long delta_t)
+void pumpe_t::step(uint32 delta_t)
 {
 	if(fab==NULL) {
 		return;
@@ -511,7 +521,7 @@ void pumpe_t::step(long delta_t)
 void pumpe_t::laden_abschliessen()
 {
 	leitung_t::laden_abschliessen();
-	spieler_t::add_maintenance(get_besitzer(), -welt->get_settings().cst_maintain_transformer, powerline_wt);
+	spieler_t::add_maintenance(get_besitzer(), -(sint32)welt->get_settings().cst_maintain_transformer, powerline_wt);
 
 	assert(get_net());
 
@@ -568,7 +578,7 @@ void senke_t::neue_karte()
 }
 
 
-void senke_t::step_all(long delta_t)
+void senke_t::step_all(uint32 delta_t)
 {
 	FOR(slist_tpl<senke_t*>, const s, senke_list) {
 		s->step(delta_t);
@@ -612,11 +622,11 @@ senke_t::~senke_t()
 		fab = NULL;
 	}
 	senke_list.remove( this );
-	spieler_t::add_maintenance(get_besitzer(), welt->get_settings().cst_maintain_transformer, powerline_wt);
+	spieler_t::add_maintenance(get_besitzer(), (sint32)welt->get_settings().cst_maintain_transformer, powerline_wt);
 }
 
 
-void senke_t::step(long delta_t)
+void senke_t::step(uint32 delta_t)
 {
 	if(fab==NULL) {
 		return;
@@ -639,7 +649,14 @@ void senke_t::step(long delta_t)
 	else {
 		power_load = 0;
 	}
-	fab->add_power_demand( power_demand-power_load ); // allows subsequently stepped senke to supply demand this senke couldn't
+
+	const sint32 demand_remaining = (sint32)power_demand - (sint32)power_load;
+	if( demand_remaining > 0 ) {
+		fab->add_power_demand( (uint32)demand_remaining ); // allows subsequently stepped senke to supply demand this senke couldn't
+	}
+	else {
+		fab->add_power_demand( 0 ); // All power fully satisfied.
+	}
 
 	if(  fab->get_besch()->get_electric_amount() == 65535  ){
 		// demand not specified in pak, use old fixed demands
@@ -661,7 +678,7 @@ void senke_t::step(long delta_t)
 }
 
 
-bool senke_t::sync_step(long delta_t)
+bool senke_t::sync_step(uint32 delta_t)
 {
 	if(fab==NULL) {
 		return false;
@@ -719,7 +736,7 @@ bool senke_t::sync_step(long delta_t)
 void senke_t::laden_abschliessen()
 {
 	leitung_t::laden_abschliessen();
-	spieler_t::add_maintenance(get_besitzer(), -welt->get_settings().cst_maintain_transformer, powerline_wt);
+	spieler_t::add_maintenance(get_besitzer(), -(sint32)welt->get_settings().cst_maintain_transformer, powerline_wt);
 
 	assert(get_net());
 

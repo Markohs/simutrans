@@ -107,7 +107,7 @@ namespace script_api {
 	}
 	SQInteger param<uint64>::push(HSQUIRRELVM vm, uint64 const& v)
 	{
-		sq_pushinteger(vm, v);
+		sq_pushinteger(vm, (SQInteger)v);
 		return 1;
 	}
 
@@ -119,7 +119,7 @@ namespace script_api {
 	}
 	SQInteger param<sint64>::push(HSQUIRRELVM vm, sint64 const& v)
 	{
-		sq_pushinteger(vm, v);
+		sq_pushinteger(vm, (SQInteger)v);
 		return 1;
 	}
 
@@ -151,7 +151,7 @@ namespace script_api {
 	}
 	SQInteger param<double>::push(HSQUIRRELVM vm, double  const& v)
 	{
-		sq_pushfloat(vm, v);
+		sq_pushfloat(vm, (SQFloat)v);
 		return 1;
 	}
 
@@ -237,8 +237,14 @@ namespace script_api {
 	SQInteger param<koord>::push(HSQUIRRELVM vm, koord const& v)
 	{
 		koord k(v);
-		// transform coordinates
-		welt->get_scenario()->koord_w2sq(k);
+		if (k.x != -1  &&  k.y != -1) {
+			// transform coordinates
+			welt->get_scenario()->koord_w2sq(k);
+		}
+		else {
+			k = koord::invalid;
+		}
+
 		sq_newtable(vm);
 		create_slot<sint16>(vm, "x", k.x);
 		create_slot<sint16>(vm, "y", k.y);
@@ -325,9 +331,9 @@ namespace script_api {
 
 	spieler_t* param<spieler_t*>::get(HSQUIRRELVM vm, SQInteger index)
 	{
-		uint16 plnr = 0;
+		uint8 plnr = 0;
 		get_slot(vm, "nr", plnr, index);
-		if (plnr < 15) {
+		if(plnr < 15) {
 			return welt->get_spieler(plnr);
 		}
 		else {
@@ -359,7 +365,7 @@ namespace script_api {
 	const haltestelle_t* param<const haltestelle_t*>::get(HSQUIRRELVM vm, SQInteger index)
 	{
 		halthandle_t halt = param<halthandle_t>::get(vm, index);
-		return halt.is_bound() ? halt.get_rep() : NULL;
+		return halt.get_rep();
 	}
 
 
@@ -464,7 +470,7 @@ namespace script_api {
 	simline_t* param<simline_t*>::get(HSQUIRRELVM vm, SQInteger index)
 	{
 		linehandle_t line = param<linehandle_t>::get(vm, index);
-		return line.is_bound() ? line.get_rep() : NULL;
+		return line.get_rep();
 	}
 
 

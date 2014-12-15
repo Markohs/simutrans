@@ -74,7 +74,7 @@ bool ai_passenger_t::set_active(bool new_state)
 halthandle_t ai_passenger_t::get_our_hub( const stadt_t *s ) const
 {
 	FOR(vector_tpl<halthandle_t>, const halt, haltestelle_t::get_alle_haltestellen()) {
-		if(  halt->get_besitzer()==(const spieler_t *)this  ) {
+		if (halt->get_besitzer() == sim::up_cast<spieler_t const*>(this)) {
 			if(  halt->get_pax_enabled()  &&  (halt->get_station_type()&haltestelle_t::busstop)!=0  ) {
 				koord h=halt->get_basis_pos();
 				if(h.x>=s->get_linksoben().x  &&  h.y>=s->get_linksoben().y  &&  h.x<=s->get_rechtsunten().x  &&  h.y<=s->get_rechtsunten().y  ) {
@@ -430,7 +430,6 @@ bool ai_passenger_t::create_water_transport_vehikel(const stadt_t* start_stadt, 
 	convoi_t* cnv = new convoi_t(this);
 	cnv->set_name(v->get_besch()->get_name());
 	cnv->add_vehikel( v );
-	welt->sync_add( cnv );
 	cnv->set_line(line);
 	cnv->start();
 
@@ -486,8 +485,16 @@ halthandle_t ai_passenger_t::build_airport(const stadt_t* city, koord pos, int r
 	const koord dx( size.x/2, size.y/2 );
 	for(  sint16 i=0;  i!=size.y+dx.y;  i+=dx.y  ) {
 		for( sint16 j=0;  j!=size.x+dx.x;  j+=dx.x  ) {
+			climate c = welt->get_climate(pos+koord(j,i));
 			if(!welt->ebne_planquadrat(this,pos+koord(j,i),h)) {
 				return halthandle_t();
+			}
+			// ensure is land
+			grund_t* bd = welt->lookup_kartenboden(pos+koord(j,i));
+			if (bd->get_typ() == grund_t::wasser) {
+				welt->set_water_hgt(pos+koord(j,i), bd->get_hoehe()-1);
+				welt->access(pos+koord(j,i))->correct_water();
+				welt->set_climate(pos+koord(j,i), c, true);
 			}
 		}
 	}
@@ -742,7 +749,6 @@ bool ai_passenger_t::create_air_transport_vehikel(const stadt_t *start_stadt, co
 	convoi_t* cnv = new convoi_t(this);
 	cnv->set_name(v->get_besch()->get_name());
 	cnv->add_vehikel( v );
-	welt->sync_add( cnv );
 	cnv->set_line(line);
 	cnv->start();
 
@@ -794,7 +800,6 @@ DBG_MESSAGE("ai_passenger_t::create_bus_transport_vehikel()","bus at (%i,%i)",st
 		cnv->set_name(v->get_besch()->get_name());
 		cnv->add_vehikel( v );
 
-		welt->sync_add( cnv );
 		cnv->set_line(line);
 		cnv->start();
 	}
@@ -915,7 +920,6 @@ void ai_passenger_t::cover_city_with_bus_route(koord start_pos, int number_of_st
 		cnv->set_name(v->get_besch()->get_name());
 		cnv->add_vehikel( v );
 
-		welt->sync_add( cnv );
 		cnv->set_line(line);
 		cnv->start();
 	}
@@ -1316,7 +1320,6 @@ DBG_MESSAGE("ai_passenger_t::do_passenger_ki()","using %s on %s",road_vehicle->g
 									convoi_t* new_cnv = new convoi_t(this);
 									new_cnv->set_name( v->get_besch()->get_name() );
 									new_cnv->add_vehikel( v );
-									welt->sync_add( new_cnv );
 									new_cnv->set_line(line);
 									new_cnv->start();
 								}
@@ -1347,7 +1350,6 @@ DBG_MESSAGE("ai_passenger_t::do_passenger_ki()","using %s on %s",road_vehicle->g
 					convoi_t* new_cnv = new convoi_t(this);
 					new_cnv->set_name( v->get_besch()->get_name() );
 					new_cnv->add_vehikel( v );
-					welt->sync_add( new_cnv );
 					new_cnv->set_line( line );
 					// on waiting line, wait at alternating stations for load balancing
 					if(  line->get_schedule()->eintrag[1].ladegrad==90  &&  line->get_linetype()!=simline_t::truckline  &&  (line->count_convoys()&1)==0  ) {

@@ -9,8 +9,6 @@
  */
 
 #ifdef _WIN32
-// windows.h defines min and max macros which we don't want
-#define NOMINMAX 1
 #include <windows.h>
 #endif
 
@@ -1138,7 +1136,7 @@ void ex_ord_update_mx_my()
 }
 
 
-unsigned long dr_time()
+uint32 dr_time()
 {
 	return SDL_GetTicks();
 }
@@ -1149,6 +1147,13 @@ void dr_sleep(uint32 usec)
 	SDL_Delay(usec);
 }
 
+void dr_start_textinput()
+{
+}
+
+void dr_stop_textinput()
+{
+}
 
 #ifdef _WIN32
 int CALLBACK WinMain(HINSTANCE, HINSTANCE, LPSTR, int)

@@ -32,7 +32,6 @@ obj_besch_t *factory_field_class_reader_t::read_node(FILE *fp, obj_node_info_t &
 	ALLOCA(char, besch_buf, node.size);
 
 	field_class_besch_t *besch = new field_class_besch_t();
-	besch->node_info = new obj_besch_t*[node.children];
 
 	// Hajo: Read data
 	fread(besch_buf, node.size, 1, fp);
@@ -61,7 +60,6 @@ obj_besch_t *factory_field_group_reader_t::read_node(FILE *fp, obj_node_info_t &
 	ALLOCA(char, besch_buf, node.size);
 
 	field_group_besch_t *besch = new field_group_besch_t();
-	besch->node_info = new obj_besch_t*[node.children];
 
 	// Hajo: Read data
 	fread(besch_buf, node.size, 1, fp);
@@ -126,9 +124,9 @@ void factory_field_group_reader_t::register_obj(obj_besch_t *&data)
 	if (field_class_besch_t *const field_class_besch = incomplete_field_class_besch) {
 		// we *must* transfer the obj_besch_t array and not just the besch object itself
 		// as xref reader has already logged the address of the array element for xref resolution
-		field_class_besch->node_info = besch->node_info;
-		besch->node_info = new obj_besch_t*[1];
-		besch->node_info[0] = field_class_besch;
+		field_class_besch->children  = besch->children;
+		besch->children              = new obj_besch_t*[1];
+		besch->children[0]           = field_class_besch;
 		incomplete_field_class_besch = NULL;
 	}
 }
@@ -140,7 +138,6 @@ obj_besch_t *factory_smoke_reader_t::read_node(FILE *fp, obj_node_info_t &node)
 	ALLOCA(char, besch_buf, node.size);
 
 	rauch_besch_t *besch = new rauch_besch_t();
-	besch->node_info = new obj_besch_t*[node.children];
 
 	// Hajo: Read data
 	fread(besch_buf, node.size, 1, fp);
@@ -168,7 +165,6 @@ obj_besch_t *factory_supplier_reader_t::read_node(FILE *fp, obj_node_info_t &nod
 	ALLOCA(char, besch_buf, node.size);
 
 	fabrik_lieferant_besch_t *besch = new fabrik_lieferant_besch_t();
-	besch->node_info = new obj_besch_t*[node.children];
 
 	// Hajo: Read data
 	fread(besch_buf, node.size, 1, fp);
@@ -203,7 +199,6 @@ obj_besch_t *factory_product_reader_t::read_node(FILE *fp, obj_node_info_t &node
 	ALLOCA(char, besch_buf, node.size);
 
 	fabrik_produkt_besch_t *besch = new fabrik_produkt_besch_t();
-	besch->node_info = new obj_besch_t*[node.children];
 
 	// Hajo: Read data
 	fread(besch_buf, node.size, 1, fp);
@@ -238,7 +233,6 @@ obj_besch_t *factory_reader_t::read_node(FILE *fp, obj_node_info_t &node)
 	ALLOCA(char, besch_buf, node.size);
 
 	fabrik_besch_t *besch = new fabrik_besch_t();
-	besch->node_info = new obj_besch_t*[node.children];
 
 	// Hajo: Read data
 	fread(besch_buf, node.size, 1, fp);
@@ -274,7 +268,8 @@ obj_besch_t *factory_reader_t::read_node(FILE *fp, obj_node_info_t &node)
 		besch->pax_demand = decode_uint16(p);
 		besch->mail_demand = decode_uint16(p);
 		DBG_DEBUG("factory_reader_t::read_node()","version=3, platz=%i, lieferanten=%i, pax=%i", besch->platzierung, besch->lieferanten, besch->pax_level );
-	} else if(version == 2) {
+	}
+	else if(version == 2) {
 		// Versioned node, version 2
 		besch->platzierung = (site_t)decode_uint16(p);
 		besch->produktivitaet = decode_uint16(p);
@@ -296,7 +291,8 @@ obj_besch_t *factory_reader_t::read_node(FILE *fp, obj_node_info_t &node)
 		besch->pax_demand = 65535;
 		besch->mail_demand = 65535;
 		DBG_DEBUG("factory_reader_t::read_node()","version=2, platz=%i, lieferanten=%i, pax=%i", besch->platzierung, besch->lieferanten, besch->pax_level );
-	} else if(version == 1) {
+	}
+	else if(version == 1) {
 		// Versioned node, version 1
 		besch->platzierung = (site_t)decode_uint16(p);
 		besch->produktivitaet = decode_uint16(p);

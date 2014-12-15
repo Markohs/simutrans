@@ -144,7 +144,12 @@ private:
 	bool beginner_mode;
 	sint32 beginner_price_factor;
 
-	bool just_in_time;
+	/* Industry supply model used.
+	 * 0 : Classic (no flow control?)
+	 * 1 : JIT Classic (maximum transit and storage limited)
+	 * 2 : JIT Version 2 (demand buffers with better consumption model)
+	 */
+	uint8 just_in_time;
 
 	// default 0, will be incremented after each 90 degree rotation until 4
 	uint8 rotation;
@@ -242,6 +247,9 @@ private:
 	// true, if this pak should be used with extensions (default)
 	bool with_private_paks;
 
+	/// what is the minimum clearance required under bridges
+	sint8 way_height_clearance;
+
 	// if true, you can buy obsolete stuff
 	bool allow_buying_obsolete_vehicles;
 	// vehicle value is decrease by this factor/1000 when a vehicle leaved the depot
@@ -304,6 +312,9 @@ public:
 	bool automaten[MAX_PLAYER_COUNT];
 	// 0 = empty, otherwise some value from simplay
 	uint8 spieler_type[MAX_PLAYER_COUNT];
+
+	// how fast new AI will built something
+	uint32 default_ai_construction_speed;
 
 	// player color suggestions for new games
 	bool default_player_color_random;
@@ -385,8 +396,8 @@ public:
 
 	bool get_beginner_mode() const {return beginner_mode;}
 
-	void set_just_in_time(bool b) { just_in_time = b; }
-	bool get_just_in_time() const {return just_in_time;}
+	void set_just_in_time(uint8 b) { just_in_time = b; }
+	uint8 get_just_in_time() const {return just_in_time;}
 
 	void set_default_climates();
 	const sint16 *get_climate_borders() const { return climate_borders; }
@@ -548,6 +559,12 @@ public:
 
 	uint16 get_remove_dummy_player_months() const { return remove_dummy_player_months; }
 	uint16 get_unprotect_abandoned_player_months() const { return unprotect_abandoned_player_months; }
+
+	sint8 get_way_height_clearance() const { return way_height_clearance; }
+	void set_way_height_clearance( sint8 n ) { way_height_clearance = n; }
+
+	uint32 get_default_ai_construction_speed() const { return default_ai_construction_speed; }
+	void set_default_ai_construction_speed( uint32 n ) { default_ai_construction_speed = n; }
 };
 
 #endif

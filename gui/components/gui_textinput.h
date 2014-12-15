@@ -24,7 +24,7 @@
 
 class gui_textinput_t :
 	public gui_action_creator_t,
-	public gui_komponente_t
+	public gui_component_t
 {
 protected:
 
@@ -120,6 +120,9 @@ public:
 	 * @author Hj. Malthaner
 	 */
 	virtual void draw(scr_coord offset);
+
+	// x position of the current cursor (for IME purposes)
+	scr_coord_val get_current_cursor_x() { return calc_cursor_pos(head_cursor_pos); };
 
 	/**
 	 * Detect change of focus state and determine whether cursor should be displayed,

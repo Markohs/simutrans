@@ -100,13 +100,13 @@ public:
 	 * Adds the component to the window
 	 * @author Hj. Malthaner
 	 */
-	void add_komponente(gui_komponente_t *komp) { container.add_komponente(komp); }
+	void add_component(gui_component_t *comp) { container.add_component(comp); }
 
 	/**
 	 * Removes the component from the container.
 	 * @author Hj. Malthaner
 	 */
-	void remove_komponente(gui_komponente_t *komp) { container.remove_komponente(komp); }
+	void remove_component(gui_component_t *comp) { container.remove_component(comp); }
 
 	/**
 	 * The name is displayed in the titlebar
@@ -141,6 +141,7 @@ public:
 	 */
 	scr_size get_windowsize() const { return size; }
 
+protected:
 	/**
 	 * Sets the window sizes
 	 * @author Hj. Malthaner
@@ -154,8 +155,9 @@ public:
 	 */
 	void set_min_windowsize(scr_size size) { min_windowsize = size; }
 
+public:
 	/**
-	 * Set minimum size of the window
+	 * Get minimum size of the window
 	 * @author Markus Weber
 	 * @date   11-May-2002
 	 */
@@ -237,7 +239,7 @@ public:
 	}
 
 	/**
-	 * Events werden hiermit an die GUI-Komponenten
+	 * Events werden hiermit an die GUI-components
 	 * gemeldet
 	 * @author Hj. Malthaner
 	 */
@@ -262,9 +264,9 @@ public:
 	 * gui_container_t::infowin_event (e.g. in action_triggered)
 	 * will have NO effect.
 	 */
-	void set_focus( gui_komponente_t *k ) { container.set_focus(k); }
+	void set_focus( gui_component_t *c ) { container.set_focus(c); }
 
-	virtual gui_komponente_t *get_focus() { return container.get_focus(); }
+	virtual gui_component_t *get_focus() { return container.get_focus(); }
 };
 
 #endif

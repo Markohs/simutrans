@@ -103,6 +103,8 @@ static bild_besch_t* create_textured_tile(const bild_besch_t* bild_lightmap, con
 		} while(  (*dest++)!=0 );
 	}
 	assert(dest - bild_dest->get_daten() == (ptrdiff_t)bild_dest->get_pic()->len);
+#else
+	(void)bild_texture;
 #endif
 	bild_dest->register_image();
 	return bild_dest;
@@ -451,7 +453,7 @@ const grund_besch_t *grund_besch_t::borders = NULL;
 const grund_besch_t *grund_besch_t::sea = NULL;
 const grund_besch_t *grund_besch_t::ausserhalb = NULL;
 
-static spezial_obj_tpl<grund_besch_t> grounds[] = {
+static spezial_obj_tpl<grund_besch_t> const grounds[] = {
     { &boden_texture,	    "ClimateTexture" },
     { &light_map,	    "LightTexture" },
     { &transition_water_texture,    "ShoreTrans" },
@@ -999,9 +1001,7 @@ void grund_besch_t::init_ground_textures(karte_t *w)
 	// free the helper bitmap
 	for(  int slope = 1;  slope < totalslopes;  slope++  ) {
 		delete all_rotations_slope[slope];
-		if(  all_rotations_beach[slope]  ) {
-			delete all_rotations_beach[slope];
-		}
+		delete all_rotations_beach[slope];
 	}
 #endif
 	//dbg->message("grund_besch_t::calc_water_level()", "Last image nr %u", final_tile->get_pic()->bild_nr);
